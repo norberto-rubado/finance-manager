@@ -1478,8 +1478,9 @@ def _ensure_schema():
 
 @pytest.fixture(autouse=True)
 def _truncate_between_tests():
-    """每个测试前 TRUNCATE 业务表(保留 alembic_version 不动)。"""
-    yield
+    """每个测试前 TRUNCATE 业务表(保留 alembic_version 不动)。
+    truncate 必须在 yield 之前,否则第 1 个 test 跑时 db 里还有 Tasks 7-8 seed 的数据,
+    会跟测试中 admin_user fixture 创建的同名 user 冲突。"""
     with _engine.begin() as conn:
         # 用 RESTART IDENTITY 让自增 id 也重置;CASCADE 处理外键
         conn.execute(text(
@@ -1488,6 +1489,7 @@ def _truncate_between_tests():
             "merchant_rules, categories, api_tokens, accounts, users "
             "RESTART IDENTITY CASCADE"
         ))
+    yield
 
 
 @pytest.fixture
