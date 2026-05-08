@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.db import db_session
 from app.models import User
 from app.db.seed_categories import seed_default_categories
+from app.db.seed_merchant_rules import seed_default_merchant_rules
 
 
 def ensure_default_user(db: Session) -> User:
@@ -26,7 +27,8 @@ def run_seed() -> None:
     with db_session() as db:
         user = ensure_default_user(db)
         cat_count = seed_default_categories(db, default_user_id=user.id)
-        print(f"[seed] user_id={user.id}, categories seeded={cat_count}")
+        rule_count = seed_default_merchant_rules(db, default_user_id=user.id)
+        print(f"[seed] user_id={user.id}, categories seeded={cat_count}, rules inserted={rule_count}")
 
 
 if __name__ == "__main__":
