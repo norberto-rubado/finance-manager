@@ -1,7 +1,7 @@
 [project]
 name = "finance-manager-backend"
 version = "0.1.0"
-description = "Personal finance manager backend (FastAPI + Postgres + Claude)"
+description = "Personal finance manager backend (FastAPI + Postgres). All LLM logic lives in upstream Agents (OpenClaw/Hermes) via MCP, not here."
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
@@ -12,7 +12,6 @@ dependencies = [
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
     "python-multipart>=0.0.12",
-    "anthropic>=0.39",
     "pandas>=2.2",
     "openpyxl>=3.1",
     "pdfplumber>=0.11",
