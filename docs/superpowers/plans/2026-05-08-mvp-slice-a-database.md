@@ -4,7 +4,7 @@
 
 **Goal:** 落地 spec § 4 描述的 8 张表 schema(users / accounts / statement_imports / transactions / categories / merchant_rules / dedup_candidates / api_tokens),完成 Alembic 迁移,在 Postgres 16 容器中跑起来,并 seed 默认分类树和 25+ 条种子规则。同时跑通"backend 本机 venv ↔ db 容器"开发链路。
 
-**Architecture:** Postgres 16 跑在 docker compose 容器中,backend 用本机 Python 3.11 venv 通过 `localhost:5432` 连。SQLAlchemy 2.x 的 declarative + `Mapped[]` 注解风格定义模型,Alembic 自动生成初始迁移,seed 用幂等脚本(可重复跑)。本切片不上 docker 化的 backend,留到切片 E 部署阶段统一改造。
+**Architecture:** Postgres 16 跑在 docker-compose 容器中,backend 用本机 Python 3.11 venv 通过 `localhost:5432` 连。SQLAlchemy 2.x 的 declarative + `Mapped[]` 注解风格定义模型,Alembic 自动生成初始迁移,seed 用幂等脚本(可重复跑)。本切片不上 docker 化的 backend,留到切片 E 部署阶段统一改造。
 
 **Tech Stack:** Python 3.11 / SQLAlchemy 2.0 / Pydantic v2 / Pydantic-Settings / Alembic 1.14 / psycopg 3 / Postgres 16 / FastAPI(仅最小 health 端点)/ pytest。
 
@@ -54,7 +54,7 @@ backend/
 ```
 
 **修改:**
-- `docker-compose.yml`:**暂不改**,沿用现有(只需 db 服务起来,backend/mcp/frontend 服务在切片 A 不启动,可在 `docker compose up db` 时只起一个)
+- `docker-compose.yml`:**暂不改**,沿用现有(只需 db 服务起来,backend/mcp/frontend 服务在切片 A 不启动,可在 `docker-compose up db` 时只起一个)
 
 ---
 
@@ -90,10 +90,10 @@ winget install Python.Python.3.11
 
 `py -3.11` 的存在让你保留全局的 Python 3.14 同时用 3.11 创建本切片 venv。
 
-- [ ] **Step 1.3: 验证 docker compose 子命令可用**
+- [ ] **Step 1.3: 验证 docker-compose 子命令可用**
 
 ```powershell
-docker compose version
+docker-compose version
 ```
 
 期望输出含 `Docker Compose version v2.x`。
@@ -903,21 +903,21 @@ def downgrade() -> None:
 
 ```powershell
 cd D:\IDEACursor\Claude-code\finance-manager
-docker compose up -d db
-docker compose ps
+docker-compose up -d db
+docker-compose ps
 ```
 
 期望 `db` 服务 status 是 `healthy`(等 5-10 秒,health check 起作用)。
 
-如果 docker-compose.yml 没有 db 单独 profile,直接 `docker compose up -d db` 也会因为依赖关系起其他服务。**当前 spec 阶段还未拆 profile,故只起 db 这一项**:
+如果 docker-compose.yml 没有 db 单独 profile,直接 `docker-compose up -d db` 也会因为依赖关系起其他服务。**当前 spec 阶段还未拆 profile,故只起 db 这一项**:
 
 ```powershell
-docker compose up -d db
+docker-compose up -d db
 ```
 
 观察日志:
 ```powershell
-docker compose logs db --tail 30
+docker-compose logs db --tail 30
 ```
 
 期望见到 `database system is ready to accept connections`。
@@ -958,7 +958,7 @@ alembic upgrade head
 - [ ] **Step 6.8: 用 psql 验证**
 
 ```powershell
-docker compose exec db psql -U finance -d finance -c "\dt"
+docker-compose exec db psql -U finance -d finance -c "\dt"
 ```
 
 期望输出 9 行(8 张业务表 + alembic_version):
@@ -1189,8 +1189,8 @@ python -m app.db.seed
 
 数据库中验证:
 ```powershell
-docker compose exec db psql -U finance -d finance -c "SELECT COUNT(*) FROM categories;"
-docker compose exec db psql -U finance -d finance -c "SELECT name FROM categories WHERE parent_id IS NULL ORDER BY sort_order;"
+docker-compose exec db psql -U finance -d finance -c "SELECT COUNT(*) FROM categories;"
+docker-compose exec db psql -U finance -d finance -c "SELECT name FROM categories WHERE parent_id IS NULL ORDER BY sort_order;"
 ```
 
 - [ ] **Step 7.6: Commit**
@@ -1407,8 +1407,8 @@ python -m app.db.seed
 期望:`rules inserted=0`(已存在,幂等)。
 
 ```powershell
-docker compose exec db psql -U finance -d finance -c "SELECT count(*) FROM merchant_rules;"
-docker compose exec db psql -U finance -d finance -c "SELECT pattern, priority FROM merchant_rules ORDER BY priority LIMIT 5;"
+docker-compose exec db psql -U finance -d finance -c "SELECT count(*) FROM merchant_rules;"
+docker-compose exec db psql -U finance -d finance -c "SELECT pattern, priority FROM merchant_rules ORDER BY priority LIMIT 5;"
 ```
 
 - [ ] **Step 8.5: Commit**
@@ -1656,8 +1656,8 @@ $ErrorActionPreference = "Stop"
 
 Write-Host "=== Slice A DoD Verification ===" -ForegroundColor Cyan
 
-Write-Host "`n[1/5] docker compose up db..." -ForegroundColor Yellow
-docker compose up -d db
+Write-Host "`n[1/5] docker-compose up db..." -ForegroundColor Yellow
+docker-compose up -d db
 Start-Sleep -Seconds 3
 
 Write-Host "`n[2/5] alembic upgrade head..." -ForegroundColor Yellow
@@ -1670,9 +1670,9 @@ python -m app.db.seed
 
 Write-Host "`n[4/5] DB checks..." -ForegroundColor Yellow
 Set-Location ..
-$catCount = (docker compose exec -T db psql -U finance -d finance -tAc "SELECT count(*) FROM categories;").Trim()
-$ruleCount = (docker compose exec -T db psql -U finance -d finance -tAc "SELECT count(*) FROM merchant_rules;").Trim()
-$tableCount = (docker compose exec -T db psql -U finance -d finance -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';").Trim()
+$catCount = (docker-compose exec -T db psql -U finance -d finance -tAc "SELECT count(*) FROM categories;").Trim()
+$ruleCount = (docker-compose exec -T db psql -U finance -d finance -tAc "SELECT count(*) FROM merchant_rules;").Trim()
+$tableCount = (docker-compose exec -T db psql -U finance -d finance -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';").Trim()
 
 Write-Host "  categories count: $catCount (expect >= 12)"
 Write-Host "  merchant_rules count: $ruleCount (expect >= 25)"
