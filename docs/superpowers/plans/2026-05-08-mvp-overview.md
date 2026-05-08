@@ -152,7 +152,7 @@ SELECT name FROM categories WHERE parent_id IS NULL ORDER BY sort_order;  -- 顶
 
 | 切片 | 状态 | 完成日期 | 实际工时 | 备注 |
 |---|---|---|---|---|
-| A. 数据库基础 | 未开始 | — | — | — |
+| A. 数据库基础 | ✅ 完成 | 2026-05-08 | (实施工时由 controller 估算) | DoD verify script passed |
 | B. 4 个解析器 | 未开始 | — | — | — |
 | C. 流水线 + API | 未开始 | — | — | — |
 | D. Web UI | 未开始 | — | — | — |
