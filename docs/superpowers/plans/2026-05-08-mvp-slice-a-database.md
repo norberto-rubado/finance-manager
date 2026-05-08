@@ -262,7 +262,7 @@ pytest tests/test_config.py -v
 
 ```python
 """Pydantic Settings:读 .env 并把字段做类型校验。"""
-from typing import List
+from typing import List, Union
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -281,7 +281,9 @@ class Settings(BaseSettings):
     # Backend
     backend_host: str = "127.0.0.1"
     backend_port: int = 8000
-    backend_cors_origins: List[str] = ["http://localhost:3000"]
+    # 注意:必须用 Union[str, List[str]] 而非纯 List[str],因为 pydantic-settings v2
+    # 对纯 List[*] 字段会先做 JSON 解析 env 值,而我们要接受 CSV 字符串。
+    backend_cors_origins: Union[str, List[str]] = ["http://localhost:3000"]
 
     # Auth
     secret_key: str = Field(..., min_length=32)
