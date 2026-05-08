@@ -148,11 +148,40 @@ SELECT name FROM categories WHERE parent_id IS NULL ORDER BY sort_order;  -- 顶
 
 ---
 
+## 已知遗留问题(切片 A → 后续切片处理)
+
+切片 A final review(Senior Code Reviewer)在 `slice-a-database` 分支末尾提出,**所有问题均不阻塞 slice A merge**(I-2 已在 commit 9a43dd6 修复),其余条目交给后续切片处理:
+
+### 切片 B 启动前必修
+
+- **I-1** `transactions(user_id, tx_time DESC)` 索引缺少 DESC。spec § 4.2 明确要求,主查询路径性能问题。
+  - 修复:在 slice B 第一个 migration 里 `op.drop_index` 旧的 + `op.create_index` 带 `text("tx_time DESC")`。
+- **I-3** 测试速度过慢(8 tests 跑 4m21s,truncate 策略瓶颈)。slice B 加 4 个解析器测试后会超 8 分钟。
+  - 修复:引入独立 test database(`.env` 加 `TEST_DATABASE_URL`),或改用 nested transaction / savepoint rollback 策略代替 truncate。
+
+### 切片 C 启动前必修
+
+- **I-5** `seed.ensure_default_user` 中 `password_hash="$2b$12$placeholder_replace_in_slice_c"` 不是合法 bcrypt hash。slice C 实现 `/api/auth/login` 时,需要从 Settings 读 `admin_password_hash` 替换占位符。
+- **Recommendation #5**:`merchant_rules` 中 priority=20 的 6 条"跨源标记"规则 `category_id=NULL`。slice C 规则分类引擎要正确处理 `category_id IS NULL`(跳过分类、仅做标记),不能简单 `if category_id: assign`。建议在 `MerchantRule` 上加 `is_marker: bool` 或通过 `priority<30` 的约定区分。
+- **Recommendation #3-4**:`source_unique_key` 是 `nullable=True + unique=True`,Postgres 中允许多个 NULL 共存(对 conversation/manual 来源是正确行为)。slice B 解析器接口需固定生成格式 `f"{source}:{external_tx_id}"`,确保 bank/alipay/wechat 来源必填。
+
+### Polish(后续任意切片处理)
+
+- **I-4** `seed_default_categories` 返回值"总数"(46)而非"新增数",二次跑误导运维。改为返回 `(created, total)` 或仅 `created`。
+- **M-1** `alembic.ini` 的 `post_write_hooks` 配置 ruff,但 venv 外执行时找不到。改用 `python -m ruff` 或显式 venv 路径。
+- **M-2** `conftest.py` 的 `db` fixture rollback 注释有误导,应说明数据靠 `_truncate_between_tests` 清理。
+- **M-3** `test_seed_*` 断言用 `>= 12 / >= 25` 太松,应改为 `== 46 / == 29` 严格匹配。
+- **M-4** `config.py` 的 `Union[str, List[str]]` 改 PEP 604 风格 `str | list[str]`。
+- **M-5** `TimestampMixin.updated_at` 的 `onupdate=func.now()` 仅 ORM 层生效,裸 SQL 不更新。base.py docstring 说明限制。
+- **M-6** `.env.example` 中 `DATABASE_URL=...@db:5432` 是 docker 内网 host,本机 venv 应用 `localhost`。加注释说明两种用法。
+
+---
+
 ## 完成进度
 
 | 切片 | 状态 | 完成日期 | 实际工时 | 备注 |
 |---|---|---|---|---|
-| A. 数据库基础 | ✅ 完成 | 2026-05-08 | (实施工时由 controller 估算) | DoD verify script passed |
+| A. 数据库基础 | ✅ 完成 | 2026-05-08 | (实施工时由 controller 估算) | DoD verify script passed; final review approved with I-2 fix in 9a43dd6 |
 | B. 4 个解析器 | 未开始 | — | — | — |
 | C. 流水线 + API | 未开始 | — | — | — |
 | D. Web UI | 未开始 | — | — | — |
