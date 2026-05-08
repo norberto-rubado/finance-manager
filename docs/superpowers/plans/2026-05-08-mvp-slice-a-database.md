@@ -773,7 +773,7 @@ git commit -m "feat(backend): add 8 SQLAlchemy models for MVP schema"
 [alembic]
 script_location = alembic
 prepend_sys_path = .
-sqlalchemy.url = driver://user:pass@host/dbname  # 真实值由 env.py 从 Settings 注入,这行只是占位
+sqlalchemy.url = driver://user:pass@host/dbname  # placeholder; real value injected by env.py from Settings
 
 [post_write_hooks]
 hooks = ruff
