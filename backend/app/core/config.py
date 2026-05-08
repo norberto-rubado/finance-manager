@@ -1,4 +1,5 @@
 """Pydantic Settings:读 .env 并把字段做类型校验。"""
+from functools import lru_cache
 from typing import List, Union
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -38,5 +39,6 @@ class Settings(BaseSettings):
         return v
 
 
+@lru_cache
 def get_settings() -> Settings:
     return Settings()
