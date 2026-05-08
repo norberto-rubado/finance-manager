@@ -1185,14 +1185,14 @@ cd D:\IDEACursor\Claude-code\finance-manager\backend
 python -m app.db.seed
 ```
 
-期望输出:`[seed] user_id=1, categories seeded=42`(数字与树结构一致,~42)。
+期望输出:`[seed] user_id=1, categories seeded=46`(数字与树结构一致,~42)。
 
 再跑一次:
 ```powershell
 python -m app.db.seed
 ```
 
-输出仍是 `[seed] user_id=1, categories seeded=42`(幂等)。
+输出仍是 `[seed] user_id=1, categories seeded=46`(幂等)。
 
 数据库中验证:
 ```powershell
