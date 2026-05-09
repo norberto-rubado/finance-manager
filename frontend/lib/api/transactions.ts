@@ -1,5 +1,12 @@
 import { apiFetch } from './client';
-import type { TransactionListOut, TransactionQuery } from './types';
+import type {
+  BulkUpdateByMerchantIn,
+  BulkUpdateResult,
+  TransactionListOut,
+  TransactionOut,
+  TransactionPatchIn,
+  TransactionQuery,
+} from './types';
 
 /**
  * GET /api/transactions
@@ -23,4 +30,32 @@ export function listTransactions(q: TransactionQuery = {}): Promise<TransactionL
       date_to: q.date_to,
     },
   });
+}
+
+/** GET /api/transactions/{id} — 详情。 */
+export function getTransaction(id: number): Promise<TransactionOut> {
+  return apiFetch<TransactionOut>(`/transactions/${id}`);
+}
+
+/** PATCH /api/transactions/{id} — 单条改 category_id / tx_kind。 */
+export function patchTransaction(
+  id: number,
+  body: TransactionPatchIn,
+): Promise<TransactionOut> {
+  return apiFetch<TransactionOut>(`/transactions/${id}`, { method: 'PATCH', body });
+}
+
+/** POST /api/transactions/bulk-update-by-merchant — 按商家批量改分类(可顺手建规则)。 */
+export function bulkUpdateByMerchant(
+  body: BulkUpdateByMerchantIn,
+): Promise<BulkUpdateResult> {
+  return apiFetch<BulkUpdateResult>('/transactions/bulk-update-by-merchant', {
+    method: 'POST',
+    body,
+  });
+}
+
+/** DELETE /api/transactions/{id} — 软删 / 硬删由后端决定;前端只关心 204。 */
+export function deleteTransaction(id: number): Promise<void> {
+  return apiFetch<void>(`/transactions/${id}`, { method: 'DELETE' });
 }
