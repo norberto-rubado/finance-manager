@@ -12,7 +12,9 @@ import { fmtBytes } from '@/lib/utils/fmt';
 import { cn } from '@/lib/utils/cn';
 
 const ACCEPT = '.csv,.xlsx,.pdf';
-const MAX_BYTES = 50 * 1024 * 1024; // 50MB(spec § 4.7 上限)
+// Backend slice C ships with 10MB cap (StatementImportService 内置上限);spec § 4.7 提到 50MB
+// 但实际 backend 仅放行 10MB —— 前端对齐避免用户上传 10-50MB 文件后看到 413 错误。
+const MAX_BYTES = 10 * 1024 * 1024;
 
 /**
  * 拖拽 / 点选上传账单。

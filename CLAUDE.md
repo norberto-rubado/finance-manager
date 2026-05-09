@@ -15,8 +15,8 @@
 - ✅ **A. 数据库基础**(2026-05-08 完成,merged to main,DoD verify ALL PASS)
 - ✅ **B. 4 个账单解析器**(2026-05-09 完成,DoD verify ALL PASS;含 slice A 遗留 I-1/I-3 修复)
 - ✅ **C. 导入流水线 + 去重 + 分类 + REST API**(2026-05-09 完成,DoD verify ALL PASS;含 4 项遗留 fix:B-poly-1/2、I-5、Rec #5)
-- ⏳ **D. Web UI**(下一步,5 大板块,响应式)
-- ⏳ **E. MCP server(10 工具)+ 部署**(Caddy + Cloudflare DNS-01,端口 8443/9443)
+- ✅ **D. Web UI**(2026-05-10 完成,DoD verify ALL PASS;Next.js 14 App Router + shadcn/ui;22 Vitest unit + 4 Playwright smoke;Lighthouse 桌面/手机均 > 80)
+- ⏳ **E. MCP server(10 工具)+ 部署**(下一步;Caddy + Cloudflare DNS-01,端口 8443/9443)
 
 ## 标准工作流(每个新切片)
 1. 起 `slice-X-NAME` 分支(从 main):`git checkout -b slice-b-parsers`
@@ -49,5 +49,5 @@ slice C 已闭环 4 项(B-poly-1/2、I-5、Rec #5),后续切片如有新 polish 
 
 ## 仓库状态
 - 本地 git 仓库,**无 remote**(单人项目)
-- main 分支 68 commits(2 brainstorm/spec + 22 slice A + 19 slice B + 25 slice C)
+- main 分支 68 commits(2 brainstorm/spec + 22 slice A + 19 slice B + 25 slice C);slice D 在 worktree 分支 `worktree-slice-d-webui-impl`,merge 后预计 +25 commits → ~93
 - DoD 验证脚本:slice A 是 `backend/scripts/verify_slice_a.ps1`(从 finance-manager/ 根跑);后续切片各自添加 `verify_slice_X.ps1`

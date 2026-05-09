@@ -116,9 +116,11 @@ describe('apiFetch', () => {
   });
 
   it('已经在 /login 时 401 不再跳', async () => {
+    // Sentinel value 防止 false-positive:若 client 错误地执行了 redirect → href 会被覆盖为 '/login'
+    // (跟 sentinel 不一致),即使新值刚好仍是 /login 也能识别出"被改写"了。
     Object.defineProperty(window, 'location', {
       writable: true,
-      value: { ...originalLocation, pathname: '/login', href: '/login' },
+      value: { ...originalLocation, pathname: '/login', href: '/login?from=last' },
     });
     vi.stubGlobal(
       'fetch',
@@ -129,7 +131,12 @@ describe('apiFetch', () => {
     } catch {
       /* swallow */
     }
-    // href 没被改成新 URL
-    expect(window.location.href).toBe('/login');
+    // sentinel 保留 → client 没改 href → 没跳
+    expect(window.location.href).toBe('/login?from=last');
+  });
+
+  it('fetch reject 透传错误', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network failure')));
+    await expect(apiFetch('/health')).rejects.toThrow('network failure');
   });
 });

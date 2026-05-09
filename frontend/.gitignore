@@ -8,3 +8,5 @@ playwright-report/
 test-results/
 .vitest-cache/
 .DS_Store
+# Next.js 自动生成的环境类型文件,每次 next dev/build 都会重写 — 不入仓
+next-env.d.ts

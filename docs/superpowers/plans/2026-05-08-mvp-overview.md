@@ -70,7 +70,7 @@ SELECT name FROM categories WHERE parent_id IS NULL ORDER BY sort_order;  -- 顶
 
 **验收命令:** `bash tests/e2e/import_flow.sh`(切片 C 内会写一个端到端 shell 测试脚本)
 
-### 切片 D:Web UI
+### 切片 D:Web UI(2026-05-10 完成,DoD verify ALL PASS)
 **DoD:** 在浏览器(电脑 1920×1080 + 手机模拟 375×667)分别跑通:
 1. 登录页输密码 → 跳首页 → 看到"本月概览"卡片
 2. 进 `/statements` → 拖拽上传支付宝 CSV → 看到导入进度 → 自动跳 `/statements/{id}/review`
@@ -189,7 +189,7 @@ SELECT name FROM categories WHERE parent_id IS NULL ORDER BY sort_order;  -- 顶
 | A. 数据库基础 | ✅ 完成 | 2026-05-08 | (实施工时由 controller 估算) | DoD verify script passed; final review approved with I-2 fix in 9a43dd6 |
 | B. 4 个解析器 | ✅ 完成 | 2026-05-09 | (实施工时由 controller 估算) | DoD verify script passed; 4 parsers cov ≥ 80%; 137 tests pass; I-1/I-3 also resolved; 真实 4 份样本入仓 |
 | C. 流水线 + API | ✅ 完成 | 2026-05-09 | (实施工时由 controller 估算) | DoD verify ALL PASS;含 4 项 slice A/B 遗留 fix(B-poly-1/2、I-5、Rec #5);全测试 271 passed |
-| D. Web UI | 未开始 | — | — | — |
+| D. Web UI | ✅ 完成 | 2026-05-10 | (实施工时由 controller 估算) | DoD verify ALL PASS;Next.js 14 App Router + shadcn/ui;22 Vitest unit + 4 Playwright smoke;Lighthouse 桌面/手机 > 80;25 commits |
 | E. MCP + 部署 | 未开始 | — | — | — |
 
 (end of overview)
