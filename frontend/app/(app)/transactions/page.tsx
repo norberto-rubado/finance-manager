@@ -14,6 +14,7 @@ import {
   type FilterValues,
 } from '@/components/transactions/transaction-filter';
 import { TransactionCards } from '@/components/transactions/transaction-cards';
+import { TransactionEditDialog } from '@/components/transactions/transaction-edit-dialog';
 import { TransactionTable } from '@/components/transactions/transaction-table';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -97,6 +98,8 @@ function TransactionsView() {
   // Task 13:批量改类 dialog 状态
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkDefaultMerchant, setBulkDefaultMerchant] = useState('');
+  // Task 14:单条编辑 dialog —— 用 tx 对象本身做 open 哨兵(null = 关闭)
+  const [editingTx, setEditingTx] = useState<TransactionOut | null>(null);
   // 触发 transactions 重抓的 key —— 改类成功后 +1 复用同一 useEffect,
   // 避免在 onBulkSuccess 里重复 URL→API query 转换逻辑(DRY)。
   const [refreshKey, setRefreshKey] = useState(0);
@@ -212,6 +215,16 @@ function TransactionsView() {
     setRefreshKey((k) => k + 1);
   };
 
+  // Task 14:单条编辑 ——
+  // 成功后用 PATCH 返回的 updated 对象就地替换列表中的同 id 行,
+  // 避免整页重抓(用户当前正在浏览的 filter / page 不变)。
+  const onEdit = (tx: TransactionOut) => setEditingTx(tx);
+  const onEditSuccess = (updated: TransactionOut) => {
+    setItems((prev) =>
+      prev ? prev.map((t) => (t.id === updated.id ? updated : t)) : prev,
+    );
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -256,7 +269,7 @@ function TransactionsView() {
                   selectedIds={selectedIds}
                   onToggle={onToggle}
                   onToggleAll={onToggleAll}
-                  onEdit={() => toast.info('Task 14 实现编辑 dialog')}
+                  onEdit={onEdit}
                 />
               </div>
               {/* 手机卡片(Task 13) */}
@@ -267,7 +280,7 @@ function TransactionsView() {
                   categoryMap={categoryMap}
                   selectedIds={selectedIds}
                   onToggle={onToggle}
-                  onEdit={() => toast.info('Task 14 实现编辑 dialog')}
+                  onEdit={onEdit}
                 />
               </div>
               <Pagination
@@ -293,6 +306,16 @@ function TransactionsView() {
         defaultMerchant={bulkDefaultMerchant}
         selectedCount={selectedItems.length}
         onSuccess={onBulkSuccess}
+      />
+
+      {/* Task 14:单条编辑 dialog —— editingTx 同时承担 open 哨兵 + 当前编辑对象 */}
+      <TransactionEditDialog
+        tx={editingTx}
+        accountMap={accountMap}
+        onOpenChange={(open) => {
+          if (!open) setEditingTx(null);
+        }}
+        onSuccess={onEditSuccess}
       />
     </div>
   );
