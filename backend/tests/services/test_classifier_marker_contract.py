@@ -14,14 +14,6 @@ from datetime import datetime
 from decimal import Decimal
 
 import pytest
-
-# Task 14 实现 classifier.py 时移除此 marker
-pytestmark = pytest.mark.xfail(
-    reason="awaits Task 14 classifier implementation",
-    raises=ImportError,
-    strict=True,
-)
-
 from sqlalchemy import select
 
 from app.models import Account, Category, MerchantRule, Transaction, User
