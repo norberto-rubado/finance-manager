@@ -159,14 +159,14 @@ SELECT name FROM categories WHERE parent_id IS NULL ORDER BY sort_order;  -- 顶
 
 ### 切片 C 启动前必修
 
-- **I-5** `seed.ensure_default_user` 中 `password_hash="$2b$12$placeholder_replace_in_slice_c"` 不是合法 bcrypt hash。slice C 实现 `/api/auth/login` 时,需要从 Settings 读 `admin_password_hash` 替换占位符。
-- **Recommendation #5**:`merchant_rules` 中 priority=20 的 6 条"跨源标记"规则 `category_id=NULL`。slice C 规则分类引擎要正确处理 `category_id IS NULL`(跳过分类、仅做标记),不能简单 `if category_id: assign`。建议在 `MerchantRule` 上加 `is_marker: bool` 或通过 `priority<30` 的约定区分。
+- ~~**I-5** `seed.ensure_default_user` 中 `password_hash="$2b$12$placeholder_replace_in_slice_c"` 不是合法 bcrypt hash。slice C 实现 `/api/auth/login` 时,需要从 Settings 读 `admin_password_hash` 替换占位符。~~ ✅ 已在 slice C Task 3 改读 Settings.admin_password_hash(commit hash: 见 git log)
+- ~~**Recommendation #5**:`merchant_rules` 中 priority=20 的 6 条"跨源标记"规则 `category_id=NULL`。slice C 规则分类引擎要正确处理 `category_id IS NULL`(跳过分类、仅做标记),不能简单 `if category_id: assign`。建议在 `MerchantRule` 上加 `is_marker: bool` 或通过 `priority<30` 的约定区分。~~ ✅ 已在 slice C Task 4 + Task 14 处理(契约测试 + classifier 实现)
 - **Recommendation #3-4**:`source_unique_key` 是 `nullable=True + unique=True`,Postgres 中允许多个 NULL 共存(对 conversation/manual 来源是正确行为)。slice B 解析器接口需固定生成格式 `f"{source}:{external_tx_id}"`,确保 bank/alipay/wechat 来源必填。
 
 ### Polish(slice B 产生,后续可清理)
 
-- **B-poly-1** `ccb_credit_pdf.py` 用 codepoint set 匹配中文(`_has_codepoints` / `_identify_currency`),实质是把 Windows GBK 终端显示乱码误判为 PDF 字体编码问题。pdfplumber 实际抽取的是标准 UTF-8。建议改回标准字符串子串匹配(`"银联" in s and "入账" in s`),并修正 docstring 中"自定义字体 subset"的误导说明。
-- **B-poly-2** `_is_repayment("联银账入")` 等乱序输入会误返回 True(因为用 set comparison)。改为子串顺序匹配可消除。
+- ~~**B-poly-1** `ccb_credit_pdf.py` 用 codepoint set 匹配中文(`_has_codepoints` / `_identify_currency`),实质是把 Windows GBK 终端显示乱码误判为 PDF 字体编码问题。pdfplumber 实际抽取的是标准 UTF-8。建议改回标准字符串子串匹配(`"银联" in s and "入账" in s`),并修正 docstring 中"自定义字体 subset"的误导说明。~~ ✅ 已在 slice C Task 2 修复(commit hash: 见 git log)
+- ~~**B-poly-2** `_is_repayment("联银账入")` 等乱序输入会误返回 True(因为用 set comparison)。改为子串顺序匹配可消除。~~ ✅ 已在 slice C Task 1 修复(commit hash: 见 git log)
 - **B-poly-3** `wechat_xlsx.py` 的 `_to_str` 把 "/" 字面值视为占位符,会误处理真实商户名含 "/" 的情况(如 "A/B 公司")。本切片真实样本未触发,留待 slice C 分类引擎遇到时处理。
 - **B-poly-4** `seed.py` 真实 `python -m app.db.seed` 跑后会在 dev db 留持久 admin 行,导致 test 必须用 `ON CONFLICT` 兜底(已在 commit `80e6908` 解决)。根本修复:slice C 启动 finance_test 独立 db 后启用 TEST_DATABASE_URL。
 
@@ -188,7 +188,7 @@ SELECT name FROM categories WHERE parent_id IS NULL ORDER BY sort_order;  -- 顶
 |---|---|---|---|---|
 | A. 数据库基础 | ✅ 完成 | 2026-05-08 | (实施工时由 controller 估算) | DoD verify script passed; final review approved with I-2 fix in 9a43dd6 |
 | B. 4 个解析器 | ✅ 完成 | 2026-05-09 | (实施工时由 controller 估算) | DoD verify script passed; 4 parsers cov ≥ 80%; 137 tests pass; I-1/I-3 also resolved; 真实 4 份样本入仓 |
-| C. 流水线 + API | 未开始 | — | — | — |
+| C. 流水线 + API | ✅ 完成 | 2026-05-09 | (实施工时由 controller 估算) | DoD verify ALL PASS;含 4 项 slice A/B 遗留 fix(B-poly-1/2、I-5、Rec #5);全测试 271 passed |
 | D. Web UI | 未开始 | — | — | — |
 | E. MCP + 部署 | 未开始 | — | — | — |
 

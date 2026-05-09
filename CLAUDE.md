@@ -14,8 +14,8 @@
 ## 5 切片进度
 - ✅ **A. 数据库基础**(2026-05-08 完成,merged to main,DoD verify ALL PASS)
 - ✅ **B. 4 个账单解析器**(2026-05-09 完成,DoD verify ALL PASS;含 slice A 遗留 I-1/I-3 修复)
-- ⏳ **C. 导入流水线 + 去重 + 分类 + REST API**(下一步)
-- ⏳ **D. Web UI**(5 大板块,响应式)
+- ✅ **C. 导入流水线 + 去重 + 分类 + REST API**(2026-05-09 完成,DoD verify ALL PASS;含 4 项遗留 fix:B-poly-1/2、I-5、Rec #5)
+- ⏳ **D. Web UI**(下一步,5 大板块,响应式)
 - ⏳ **E. MCP server(10 工具)+ 部署**(Caddy + Cloudflare DNS-01,端口 8443/9443)
 
 ## 标准工作流(每个新切片)
@@ -35,14 +35,11 @@
 - **Postgres**:容器内 5432,本机 venv 连 `localhost:5432`,容器间互连用 host `db`
 - **commit 规约**:`feat / fix / refactor / docs / test / chore` 前缀;中英文混排但代码术语必英文;每步立即 commit 不批量
 
-## 遗留问题(slice C 必须处理)
-完整列表见 [overview.md 的"已知遗留问题"段]。slice B/C 关键条目:
-- ~~**I-1**:`transactions(user_id, tx_time DESC)` 索引缺 DESC~~ ✅ slice B 已修复
-- ~~**I-3**:测试速度过慢(4m21s)~~ ✅ slice B 已改 savepoint rollback → 24s
-- **I-5(slice C 启动前)**:`seed.py:19` 的 bcrypt placeholder `"$2b$12$placeholder_replace_in_slice_c"` 不合法,需用真实 hash 替换
-- **Rec #5(slice C 启动前)**:`merchant_rules` 中 `priority=20` 的 6 条规则 `category_id IS NULL` 是"仅标记不分类",分类引擎需正确处理(不能 `if category_id: assign`)
+## 遗留问题(slice D/E 处理)
 
-slice B 自身产生的 polish 遗留见 overview.md '### Polish(slice B 产生,后续可清理)' 段。
+slice C 已闭环 4 项(B-poly-1/2、I-5、Rec #5),后续切片如有新 polish 在 overview.md 已知遗留问题段累积。
+
+其余 overview.md 中登记的低优先级条目(I-4、M-1 至 M-6、B-poly-3/4)留给后续切片处理。
 
 ## 真实账单样本(slice B 解析器测试用,GBK/PDF/xlsx 都已被验证可读)
 - 支付宝 CSV:`C:\Users\WINDOWS\Desktop\财务记录\alipay_record_20260326_2219\alipay_record_20260326_2219_1.csv`(**GBK** 编码,跳前 4 行元信息,16 列)
