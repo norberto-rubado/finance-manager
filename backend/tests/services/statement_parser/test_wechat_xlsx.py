@@ -104,3 +104,109 @@ def test_parse_period_covers_2025_q4_to_2026_q1(parsed):
 def test_parse_invalid_bytes_raises(parser: WechatXlsxParser):
     with pytest.raises(ValueError):
         parser.parse(b"not an xlsx at all")
+
+
+# ── helper 函数单元测试(覆盖 missing 行) ─────────────────────────────────────
+
+from app.services.statement_parser.wechat_xlsx import (
+    _parse_amount,
+    _to_str,
+    _infer_tx_kind,
+)
+
+
+class TestParseAmount:
+    """_parse_amount 各路径覆盖。"""
+
+    def test_none_returns_zero(self):
+        assert _parse_amount(None) == Decimal("0")
+
+    def test_int_value(self):
+        assert _parse_amount(10) == Decimal("10")
+
+    def test_float_value(self):
+        result = _parse_amount(3.14)
+        assert result == Decimal("3.14")
+
+    def test_string_with_yen_symbol(self):
+        assert _parse_amount("¥123.45") == Decimal("123.45")
+
+    def test_string_with_xa5(self):
+        assert _parse_amount("\xa5999.00") == Decimal("999.00")
+
+    def test_string_with_comma(self):
+        assert _parse_amount("1,234.56") == Decimal("1234.56")
+
+    def test_empty_string_returns_zero(self):
+        assert _parse_amount("   ") == Decimal("0")
+
+    def test_invalid_string_returns_zero(self):
+        assert _parse_amount("abc") == Decimal("0")
+
+
+class TestToStr:
+    """_to_str 各路径覆盖。"""
+
+    def test_none_returns_empty(self):
+        assert _to_str(None) == ""
+
+    def test_slash_returns_empty(self):
+        assert _to_str("/") == ""
+
+    def test_normal_string(self):
+        assert _to_str("hello") == "hello"
+
+    def test_strips_whitespace(self):
+        assert _to_str("  hello  ") == "hello"
+
+
+class TestInferTxKind:
+    """_infer_tx_kind 各路径覆盖。"""
+
+    def test_expense(self):
+        assert _infer_tx_kind("支出") == "expense"
+
+    def test_income(self):
+        assert _infer_tx_kind("收入") == "income"
+
+    def test_slash_neutral(self):
+        assert _infer_tx_kind("/") == "neutral"
+
+    def test_none_neutral(self):
+        assert _infer_tx_kind(None) == "neutral"
+
+    def test_other_neutral(self):
+        assert _infer_tx_kind("other") == "neutral"
+
+
+def test_parse_missing_columns_raises(parser: WechatXlsxParser):
+    """xlsx 缺少必需列时应抛 ValueError。"""
+    import io
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    # 第 1 行写微信账单标识(让 detect 通过),第 18 行写不完整表头
+    ws.cell(row=1, column=1, value="微信支付账单明细")
+    ws.cell(row=18, column=1, value="Wrong Column")
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    with pytest.raises(ValueError, match="missing columns"):
+        parser.parse(buf.read())
+
+
+def test_parse_too_short_xlsx_raises(parser: WechatXlsxParser):
+    """行数不够 18 行时应抛 ValueError。"""
+    import io
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.cell(row=1, column=1, value="微信支付账单明细")
+    # 只有 5 行,远不够 18 行
+    for i in range(1, 6):
+        ws.cell(row=i, column=1, value=f"row{i}")
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    with pytest.raises(ValueError):
+        parser.parse(buf.read())

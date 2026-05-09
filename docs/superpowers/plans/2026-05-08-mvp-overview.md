@@ -152,18 +152,23 @@ SELECT name FROM categories WHERE parent_id IS NULL ORDER BY sort_order;  -- 顶
 
 切片 A final review(Senior Code Reviewer)在 `slice-a-database` 分支末尾提出,**所有问题均不阻塞 slice A merge**(I-2 已在 commit 9a43dd6 修复),其余条目交给后续切片处理:
 
-### 切片 B 启动前必修
+### 切片 B 启动前必修(已闭环)
 
-- **I-1** `transactions(user_id, tx_time DESC)` 索引缺少 DESC。spec § 4.2 明确要求,主查询路径性能问题。
-  - 修复:在 slice B 第一个 migration 里 `op.drop_index` 旧的 + `op.create_index` 带 `text("tx_time DESC")`。
-- **I-3** 测试速度过慢(8 tests 跑 4m21s,truncate 策略瓶颈)。slice B 加 4 个解析器测试后会超 8 分钟。
-  - 修复:引入独立 test database(`.env` 加 `TEST_DATABASE_URL`),或改用 nested transaction / savepoint rollback 策略代替 truncate。
+- ~~**I-1** `transactions(user_id, tx_time DESC)` 索引缺少 DESC~~ ✅ 已在 slice B Task 1 修复(commit `0e349f0`)
+- ~~**I-3** 测试速度过慢(8 tests 跑 4m21s,truncate 策略瓶颈)~~ ✅ 已在 slice B Task 2 改为 nested-savepoint(commit `5cb2353` + `8a55895`),全测试套件从 4m21s → 24s
 
 ### 切片 C 启动前必修
 
 - **I-5** `seed.ensure_default_user` 中 `password_hash="$2b$12$placeholder_replace_in_slice_c"` 不是合法 bcrypt hash。slice C 实现 `/api/auth/login` 时,需要从 Settings 读 `admin_password_hash` 替换占位符。
 - **Recommendation #5**:`merchant_rules` 中 priority=20 的 6 条"跨源标记"规则 `category_id=NULL`。slice C 规则分类引擎要正确处理 `category_id IS NULL`(跳过分类、仅做标记),不能简单 `if category_id: assign`。建议在 `MerchantRule` 上加 `is_marker: bool` 或通过 `priority<30` 的约定区分。
 - **Recommendation #3-4**:`source_unique_key` 是 `nullable=True + unique=True`,Postgres 中允许多个 NULL 共存(对 conversation/manual 来源是正确行为)。slice B 解析器接口需固定生成格式 `f"{source}:{external_tx_id}"`,确保 bank/alipay/wechat 来源必填。
+
+### Polish(slice B 产生,后续可清理)
+
+- **B-poly-1** `ccb_credit_pdf.py` 用 codepoint set 匹配中文(`_has_codepoints` / `_identify_currency`),实质是把 Windows GBK 终端显示乱码误判为 PDF 字体编码问题。pdfplumber 实际抽取的是标准 UTF-8。建议改回标准字符串子串匹配(`"银联" in s and "入账" in s`),并修正 docstring 中"自定义字体 subset"的误导说明。
+- **B-poly-2** `_is_repayment("联银账入")` 等乱序输入会误返回 True(因为用 set comparison)。改为子串顺序匹配可消除。
+- **B-poly-3** `wechat_xlsx.py` 的 `_to_str` 把 "/" 字面值视为占位符,会误处理真实商户名含 "/" 的情况(如 "A/B 公司")。本切片真实样本未触发,留待 slice C 分类引擎遇到时处理。
+- **B-poly-4** `seed.py` 真实 `python -m app.db.seed` 跑后会在 dev db 留持久 admin 行,导致 test 必须用 `ON CONFLICT` 兜底(已在 commit `80e6908` 解决)。根本修复:slice C 启动 finance_test 独立 db 后启用 TEST_DATABASE_URL。
 
 ### Polish(后续任意切片处理)
 
@@ -182,7 +187,7 @@ SELECT name FROM categories WHERE parent_id IS NULL ORDER BY sort_order;  -- 顶
 | 切片 | 状态 | 完成日期 | 实际工时 | 备注 |
 |---|---|---|---|---|
 | A. 数据库基础 | ✅ 完成 | 2026-05-08 | (实施工时由 controller 估算) | DoD verify script passed; final review approved with I-2 fix in 9a43dd6 |
-| B. 4 个解析器 | 未开始 | — | — | — |
+| B. 4 个解析器 | ✅ 完成 | 2026-05-09 | (实施工时由 controller 估算) | DoD verify script passed; 4 parsers cov ≥ 80%; 137 tests pass; I-1/I-3 also resolved; 真实 4 份样本入仓 |
 | C. 流水线 + API | 未开始 | — | — | — |
 | D. Web UI | 未开始 | — | — | — |
 | E. MCP + 部署 | 未开始 | — | — | — |

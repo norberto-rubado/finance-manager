@@ -129,3 +129,185 @@ def test_parse_metadata_counts(parsed):
 def test_parse_invalid_pdf_raises(parser: CcbCreditPdfParser):
     with pytest.raises(ValueError):
         parser.parse(b"not a pdf")
+
+
+# ── helper 函数单元测试(覆盖 missing 行) ─────────────────────────────────────
+
+from decimal import Decimal
+
+from app.services.statement_parser.ccb_credit_pdf import (
+    _has_codepoints,
+    _starts_with_codepoints,
+    _identify_currency,
+    _parse_curr_amt,
+    _parse_yyyymmdd,
+    _split_channel_prefix,
+    _is_repayment,
+)
+
+
+class TestHasCodepoints:
+    def test_all_present(self):
+        # "AB" contains ord('A')=65, ord('B')=66
+        assert _has_codepoints("AB", (65, 66)) is True
+
+    def test_missing_one(self):
+        assert _has_codepoints("A", (65, 66)) is False
+
+    def test_empty_string(self):
+        assert _has_codepoints("", (65,)) is False
+
+
+class TestStartsWithCodepoints:
+    def test_matches(self):
+        assert _starts_with_codepoints("AB", (65, 66)) is True
+
+    def test_too_short(self):
+        assert _starts_with_codepoints("A", (65, 66)) is False
+
+    def test_wrong_order(self):
+        assert _starts_with_codepoints("BA", (65, 66)) is False
+
+
+class TestIdentifyCurrency:
+    def test_cny_ren(self):
+        # 人 U+4eba
+        assert _identify_currency("人民币") == "CNY"
+
+    def test_eur(self):
+        # 欧 U+6b27
+        assert _identify_currency("欧元") == "EUR"
+
+    def test_hkd_gang(self):
+        # 港 U+6e2f
+        assert _identify_currency("港元") == "HKD"
+
+    def test_hkd_xiang(self):
+        # 香 U+9999
+        assert _identify_currency("香港") == "HKD"
+
+    def test_usd(self):
+        # 美 U+7f8e
+        assert _identify_currency("美元") == "USD"
+
+    def test_jpy(self):
+        # 日 U+65e5
+        assert _identify_currency("日元") == "JPY"
+
+    def test_gbp(self):
+        # 英 U+82f1
+        assert _identify_currency("英镑") == "GBP"
+
+    def test_aud(self):
+        # 澳 U+6fb3
+        assert _identify_currency("澳元") == "AUD"
+
+    def test_ascii_iso_code(self):
+        assert _identify_currency("USD") == "USD"
+        assert _identify_currency("eur") == "EUR"
+
+    def test_unknown_passthrough(self):
+        result = _identify_currency("ሴ噸")
+        assert isinstance(result, str)
+
+
+class TestParseCurrAmt:
+    def test_cny_standard(self):
+        iso, amt = _parse_curr_amt("人民币元/518.00")
+        assert iso == "CNY"
+        assert amt == Decimal("518.00")
+
+    def test_eur_standard(self):
+        iso, amt = _parse_curr_amt("欧元/6.25")
+        assert iso == "EUR"
+        assert amt == Decimal("6.25")
+
+    def test_negative_amount(self):
+        iso, amt = _parse_curr_amt("人民币元/-92.00")
+        assert amt == Decimal("-92.00")
+
+    def test_no_slash_numeric_fallback(self):
+        # 没有 "/" 的纯数字应 fallback 为 CNY
+        iso, amt = _parse_curr_amt("100.00")
+        assert iso == "CNY"
+        assert amt == Decimal("100.00")
+
+    def test_no_slash_invalid_fallback(self):
+        iso, amt = _parse_curr_amt("abc")
+        assert iso == "CNY"
+        assert amt == Decimal("0")
+
+    def test_invalid_amount_part(self):
+        iso, amt = _parse_curr_amt("人民币元/invalid")
+        assert iso == "CNY"
+        assert amt == Decimal("0")
+
+    def test_empty_string(self):
+        iso, amt = _parse_curr_amt("")
+        assert iso == "CNY"
+
+
+class TestParseYyyymmdd:
+    def test_valid_date(self):
+        from datetime import datetime
+        result = _parse_yyyymmdd("20260326")
+        assert result == datetime(2026, 3, 26)
+
+    def test_no_match_returns_none(self):
+        assert _parse_yyyymmdd("not a date") is None
+
+    def test_empty_returns_none(self):
+        assert _parse_yyyymmdd("") is None
+
+    def test_date_in_text(self):
+        from datetime import datetime
+        result = _parse_yyyymmdd("Date: 20260101 end")
+        assert result == datetime(2026, 1, 1)
+
+
+class TestSplitChannelPrefix:
+    def test_no_prefix(self):
+        channel, merchant = _split_channel_prefix("McDonald's")
+        assert channel is None
+        assert merchant == "McDonald's"
+
+    def test_empty_string(self):
+        channel, merchant = _split_channel_prefix("")
+        assert channel is None
+        assert merchant == ""
+
+    def test_caifutong_with_dash(self):
+        # 财付通 = U+8d22 U+4ed8 U+901a
+        desc = "财付通-SomeMerchant"
+        channel, merchant = _split_channel_prefix(desc)
+        assert channel == "财付通"
+        assert merchant == "SomeMerchant"
+
+    def test_caifutong_without_dash(self):
+        desc = "财付通SomeMerchant"
+        channel, merchant = _split_channel_prefix(desc)
+        assert channel == "财付通"
+        assert merchant == "SomeMerchant"
+
+    def test_zhifubao_with_dash(self):
+        # 支付宝 = U+652f U+4ed8 U+5b9d
+        desc = "支付宝-SomeMerchant"
+        channel, merchant = _split_channel_prefix(desc)
+        assert channel == "支付宝"
+        assert merchant == "SomeMerchant"
+
+    def test_zhifubao_without_dash(self):
+        desc = "支付宝SomeMerchant"
+        channel, merchant = _split_channel_prefix(desc)
+        assert channel == "支付宝"
+        assert merchant == "SomeMerchant"
+
+
+class TestIsRepayment:
+    def test_is_repayment_true(self):
+        # 银联入账 = U+94f6 U+8054 U+5165 U+8d26
+        desc = "银联入账"
+        assert _is_repayment(desc) is True
+
+    def test_is_repayment_false(self):
+        assert _is_repayment("SomeMerchant") is False
