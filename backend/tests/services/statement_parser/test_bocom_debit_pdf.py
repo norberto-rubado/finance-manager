@@ -94,9 +94,9 @@ def test_parse_invalid_pdf_raises(parser: BocomDebitPdfParser):
 
 
 @pytest.mark.slow
-def test_parse_full_pdf_under_30s(parser, bocom_debit_pdf_bytes):
-    """13 页 PDF 全解析应在 30s 内完成(pdfplumber 基线;放宽至 30s 兼容开发机)。"""
+def test_parse_full_pdf_under_20s(parser, bocom_debit_pdf_bytes):
+    """13 页 PDF 全解析应在 20s 内完成(实测 ~14.5s,留 1.5x 安全余量)。"""
     import time
     t0 = time.time()
     parser.parse(bocom_debit_pdf_bytes)
-    assert time.time() - t0 < 30.0
+    assert time.time() - t0 < 20.0

@@ -52,17 +52,17 @@ if ($idxOut -match "ix_transactions_user_tx_time.*tx_time\s+DESC") {
     }
 }
 
-# 4. 验证 I-3: 全测试套件 < 120s (savepoint rollback 模式,比原来 4m21s 快得多)
-Write-Host "`n[4/4] Verify I-3: full test suite completes in reasonable time..." -ForegroundColor Yellow
+# 4. 验证 I-3: 全测试套件 < 30s (savepoint rollback 模式,比原来 4m21s 快得多)
+Write-Host "`n[4/4] Verify I-3: full test suite completes in < 30s..." -ForegroundColor Yellow
 Push-Location $backendDir
 $sw = [System.Diagnostics.Stopwatch]::StartNew()
 pytest -q | Out-Null
 $sw.Stop()
 $elapsed = [math]::Round($sw.Elapsed.TotalSeconds, 1)
-if ($sw.Elapsed.TotalSeconds -lt 120) {
-    Write-Host "  PASS: ${elapsed}s < 120s (was 4m21s before I-3 fix)" -ForegroundColor Green
+if ($sw.Elapsed.TotalSeconds -lt 30) {
+    Write-Host "  PASS: ${elapsed}s < 30s (was 4m21s before I-3 fix)" -ForegroundColor Green
 } else {
-    Write-Host "  FAIL: ${elapsed}s >= 120s, test suite too slow" -ForegroundColor Red
+    Write-Host "  FAIL: ${elapsed}s >= 30s, test suite too slow" -ForegroundColor Red
     Pop-Location
     exit 1
 }
