@@ -3,6 +3,7 @@ from fastapi import APIRouter, FastAPI
 from sqlalchemy import text
 
 from app.api import auth as auth_api
+from app.api import statements as statements_api
 from app.core.db import engine
 
 app = FastAPI(title="Finance Manager API", version="0.1.0")
@@ -23,4 +24,5 @@ def health() -> dict:
 
 
 api_router.include_router(auth_api.router)
+api_router.include_router(statements_api.router)
 app.include_router(api_router)
