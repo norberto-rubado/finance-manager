@@ -17,6 +17,7 @@ from app.models import Base
 
 
 _settings = get_settings()
+# `or` 让空字符串 "" 与 None 都回落到 database_url(.env.example 占位 TEST_DATABASE_URL= 即空串)
 _db_url = _settings.test_database_url or _settings.database_url
 _engine = create_engine(_db_url, future=True)
 _TestSession = sessionmaker(bind=_engine, expire_on_commit=False, autoflush=False)
@@ -34,6 +35,8 @@ def db() -> Session:
     """每个 db 测试一个 connection + 外层 transaction + nested savepoint session。
 
     session.commit() 只 release/create savepoint;teardown rollback 外层 transaction。
+    嵌套 try/finally 保证即使中间一步抛错,connection.close() 也一定执行
+    (避免 pytest-xdist / 网络抖动场景下连接泄漏)。
     """
     connection = _engine.connect()
     outer_tx = connection.begin()
@@ -41,6 +44,10 @@ def db() -> Session:
     try:
         yield session
     finally:
-        session.close()
-        outer_tx.rollback()
-        connection.close()
+        try:
+            session.close()
+        finally:
+            try:
+                outer_tx.rollback()
+            finally:
+                connection.close()

@@ -16,8 +16,8 @@ class Settings(BaseSettings):
 
     # Postgres
     database_url: str = Field(...)
-    # 测试专用 db(可选)。未设置时 conftest fallback 到 database_url
-    # 设置示例:postgresql+psycopg://finance:pwd@localhost:5432/finance_test
+    # 测试专用 db(可选)。未设置(None)或空字符串 "" 都会让 conftest fallback 到 database_url
+    # 设置示例:postgresql+psycopg://finance:pwd@127.0.0.1:5432/finance_test
     test_database_url: str | None = None
 
     # Backend
