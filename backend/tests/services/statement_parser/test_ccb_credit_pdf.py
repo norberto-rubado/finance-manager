@@ -311,3 +311,33 @@ class TestIsRepayment:
 
     def test_is_repayment_false(self):
         assert _is_repayment("SomeMerchant") is False
+
+
+# === B-poly-2 regression:_is_repayment 必须按子串顺序匹配 ===
+
+
+def test_is_repayment_exact_match():
+    """正常的银联入账描述应识别。"""
+    assert _is_repayment("银联入账7432") is True
+    assert _is_repayment("银联入账还款 7432****") is True
+
+
+def test_is_repayment_rejects_scrambled_codepoints():
+    """B-poly-2:仅含 4 字符但顺序错乱(set 解法会误中)→ 必须 False。"""
+    assert _is_repayment("联银账入") is False
+    assert _is_repayment("入账银联") is False
+    assert _is_repayment("账入联银7432") is False
+
+
+def test_is_repayment_rejects_partial_keywords():
+    """仅含 4 字符中部分字符,真实商户名常见 → 必须 False。"""
+    assert _is_repayment("联建银行账户激活") is False  # 含银/账,但不组成"银联入账"
+    assert _is_repayment("入金账户充值") is False        # 含入/账
+    assert _is_repayment("瑞幸咖啡") is False
+    assert _is_repayment("") is False
+
+
+def test_is_repayment_substring_match_in_longer_desc():
+    """嵌入更长描述里的"银联入账"应识别(模拟真实 PDF 多空格场景)。"""
+    assert _is_repayment("12月银联入账还款记录") is True
+    assert _is_repayment("XX 银联入账 YY") is True

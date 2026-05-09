@@ -41,6 +41,10 @@ _BOCOM_MARKER_EN = "Bank of Communications"
 # ── 日期 ────────────────────────────────────────────────────────────────────
 _DATE8_RE = re.compile(r"\b(\d{8})\b")
 
+# ── 银联入账关键词(U+94f6 U+8054 U+5165 U+8d26 = 银联入账) ──────────────────
+# 必须用子串匹配,不能用 codepoint set(否则乱序字符串如"联银账入"会误判)
+_REPAYMENT_KEYWORD = "银联入账"  # 银联入账
+
 # ── 银联入账 codepoints (银联入账 = U+94f6 U+8054 U+5165 U+8d26) ─────────
 _YINLIAN_CP = (0x94f6, 0x8054)          # 银联 (前两字即可定位)
 _RUZHANG_CP = (0x5165, 0x8d26)          # 入账
@@ -176,8 +180,14 @@ def _split_channel_prefix(desc: str) -> tuple[str | None, str]:
 
 
 def _is_repayment(desc: str) -> bool:
-    """描述是否含银联入账(还款)。"""
-    return _has_codepoints(desc, _YINLIAN_CP + _RUZHANG_CP)
+    """描述是否含"银联入账"子串(还款入账记录)。
+
+    spec § 5.3.4:银联入账 + 金额为负 = 信用卡还款。
+    必须按字符顺序匹配,不能用 codepoint set(否则"联银账入"等乱序会误判)。
+    """
+    if not desc:
+        return False
+    return _REPAYMENT_KEYWORD in desc
 
 
 def _is_ccb_text(text: str) -> bool:
