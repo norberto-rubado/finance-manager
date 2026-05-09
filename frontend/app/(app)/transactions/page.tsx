@@ -22,7 +22,12 @@ import { listAccounts } from '@/lib/api/accounts';
 import { listCategories } from '@/lib/api/categories';
 import { listTransactions } from '@/lib/api/transactions';
 import { objectToSearchParams, parseIntSafe } from '@/lib/utils/query';
-import type { TransactionOut, TransactionQuery } from '@/lib/api/types';
+import type {
+  AccountOut,
+  CategoryOut,
+  TransactionOut,
+  TransactionQuery,
+} from '@/lib/api/types';
 
 const DEFAULT_LIMIT = 50;
 
@@ -91,8 +96,18 @@ function TransactionsView() {
 
   const [items, setItems] = useState<TransactionOut[] | null>(null);
   const [total, setTotal] = useState(0);
-  const [accountMap, setAccountMap] = useState<Map<number, string>>(new Map());
-  const [categoryMap, setCategoryMap] = useState<Map<number, string>>(new Map());
+  // accounts/categories:全数组 + 派生 Map(Task 22 polish:把字典从 transaction-filter 内
+  // 提升到 page.tsx,sidebar/trigger 双挂载场景下避免重复 fetch)。
+  const [accounts, setAccounts] = useState<AccountOut[]>([]);
+  const [categories, setCategories] = useState<CategoryOut[]>([]);
+  const accountMap = useMemo(
+    () => new Map(accounts.map((a) => [a.id, a.name])),
+    [accounts],
+  );
+  const categoryMap = useMemo(
+    () => new Map(categories.map((c) => [c.id, c.name])),
+    [categories],
+  );
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   // Task 13:批量改类 dialog 状态
@@ -104,14 +119,15 @@ function TransactionsView() {
   // 避免在 onBulkSuccess 里重复 URL→API query 转换逻辑(DRY)。
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // accounts / categories 一次性加载(数据变化少;Task 12 加筛选面板时复用)
+  // accounts / categories 一次性加载(数据变化少;Task 12 加筛选面板时复用,
+  // Task 22 同时给 transaction-filter 的两个 export 当 props)。
   useEffect(() => {
     Promise.all([
       listAccounts().catch(() => ({ items: [], total: 0 })),
       listCategories().catch(() => ({ items: [], total: 0 })),
     ]).then(([accRes, catRes]) => {
-      setAccountMap(new Map(accRes.items.map((a) => [a.id, a.name])));
-      setCategoryMap(new Map(catRes.items.map((c) => [c.id, c.name])));
+      setAccounts(accRes.items);
+      setCategories(catRes.items);
     });
   }, []);
 
@@ -233,6 +249,8 @@ function TransactionsView() {
         <TransactionFilterTrigger
           value={filterValues}
           onChange={onFilterChange}
+          accounts={accounts}
+          categories={categories}
         />
       </div>
 
@@ -241,6 +259,8 @@ function TransactionsView() {
         <TransactionFilterSidebar
           value={filterValues}
           onChange={onFilterChange}
+          accounts={accounts}
+          categories={categories}
         />
         <div className="min-w-0 flex-1 space-y-4">
           {items === null && (

@@ -16,10 +16,17 @@
  * - `<TransactionFilterSidebar>`:桌面 sidebar(>= md)
  * - `<TransactionFilterTrigger>`:手机 Sheet 触发按钮(< md);page.tsx 把它挂到 h1 旁
  *
- * 共享内部 `FilterFields` 组件 + `useFilterMeta` hook(账户/分类字典)。
+ * 共享内部 `FilterFields` 组件;accounts/categories 由 page.tsx 通过 props 注入。
+ *
+ * **accounts/categories 提升到 page.tsx(Task 22 polish,fixes Task 13 review Minor #5):**
+ *
+ * 之前 sidebar + trigger 各自调用一次 `useFilterMeta`(内部 listAccounts +
+ * listCategories),手机视口下两个组件都挂载(一个 hidden),导致 4 次 API 调用。
+ * Task 22 把字典提升到 page.tsx(已有 accountMap/categoryMap),作为 props 注入,
+ * 整个页面只发 1 次 accounts + 1 次 categories,符合 React 数据上提原则。
  */
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Filter as FilterIcon } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -42,8 +49,6 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 
-import { listAccounts } from '@/lib/api/accounts';
-import { listCategories } from '@/lib/api/categories';
 import type { AccountOut, CategoryOut } from '@/lib/api/types';
 
 /**
@@ -81,24 +86,6 @@ function countActive(v: FilterValues): number {
 // 我们用 __all__ / __none__ 作为哨兵。
 const ALL = '__all__';
 const NONE = '__none__';
-
-/** 共享:加载账户/分类字典(只读,变化少,组件挂载时一次性拉)。 */
-function useFilterMeta() {
-  const [accounts, setAccounts] = useState<AccountOut[]>([]);
-  const [categories, setCategories] = useState<CategoryOut[]>([]);
-
-  useEffect(() => {
-    Promise.all([
-      listAccounts().catch(() => ({ items: [], total: 0 })),
-      listCategories().catch(() => ({ items: [], total: 0 })),
-    ]).then(([acc, cat]) => {
-      setAccounts(acc.items);
-      setCategories(cat.items);
-    });
-  }, []);
-
-  return { accounts, categories };
-}
 
 function FilterFields({
   value,
@@ -239,15 +226,20 @@ function FilterFields({
 /**
  * **桌面侧栏(>= md)。** 在 page.tsx 的双栏 flex 里挂载一次。
  * 手机视口下整个 aside 自动 hidden,不影响布局。
+ *
+ * accounts/categories 由 page.tsx 注入(单次拉取共享给 sidebar + trigger)。
  */
 export function TransactionFilterSidebar({
   value,
   onChange,
+  accounts,
+  categories,
 }: {
   value: FilterValues;
   onChange: (next: FilterValues) => void;
+  accounts: AccountOut[];
+  categories: CategoryOut[];
 }) {
-  const { accounts, categories } = useFilterMeta();
   const activeCount = countActive(value);
 
   return (
@@ -271,15 +263,20 @@ export function TransactionFilterSidebar({
 /**
  * **手机筛选触发按钮(< md)。** 在 page.tsx 的 header 里挂载,点击展开 Sheet。
  * 桌面视口下整个按钮 hidden,不影响布局。
+ *
+ * accounts/categories 由 page.tsx 注入(同 sidebar)。
  */
 export function TransactionFilterTrigger({
   value,
   onChange,
+  accounts,
+  categories,
 }: {
   value: FilterValues;
   onChange: (next: FilterValues) => void;
+  accounts: AccountOut[];
+  categories: CategoryOut[];
 }) {
-  const { accounts, categories } = useFilterMeta();
   const [open, setOpen] = useState(false);
   const activeCount = countActive(value);
 

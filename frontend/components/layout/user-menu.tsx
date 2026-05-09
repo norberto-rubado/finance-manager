@@ -22,7 +22,9 @@ export function UserMenu() {
   const [username, setUsername] = useState<string | null>(null);
 
   useEffect(() => {
-    me()
+    // Task 22 polish:探测当前用户名时不主动跳 /login —— 否则 token 过期窗口下,
+    // UserMenu 会与 (app)/layout.tsx 的路由守卫同时触发跳转,造成跳两次或闪屏。
+    me({ redirectOn401: false })
       .then((u) => setUsername(u.username))
       .catch(() => setUsername(null));
   }, []);
