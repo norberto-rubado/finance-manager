@@ -1,0 +1,39 @@
+"""HTTP 边界 Pydantic schema 集中 re-export。
+
+约定:
+- XxxIn:request body
+- XxxOut:response body(from_attributes=True,可从 ORM 对象直接构造)
+- XxxQuery:query string(FastAPI Query 用)
+"""
+from app.schemas.account import AccountCreate, AccountOut, AccountUpdate
+from app.schemas.auth import LoginIn, LoginOut, MeOut
+from app.schemas.category import CategoryCreate, CategoryOut, CategoryUpdate
+from app.schemas.dedup import DedupDecisionIn, DedupPairOut, PendingPairListOut
+from app.schemas.rule import MerchantRuleCreate, MerchantRuleOut, MerchantRuleUpdate
+from app.schemas.statement import (
+    ImportResponse,
+    ReviewBundle,
+    StatementImportListOut,
+    StatementImportOut,
+)
+from app.schemas.summary import SummaryBreakdownItem, SummaryOut
+from app.schemas.transaction import (
+    BulkUpdateByMerchantIn,
+    BulkUpdateResult,
+    TransactionListOut,
+    TransactionOut,
+    TransactionPatchIn,
+    TransactionQuery,
+)
+
+__all__ = [
+    "LoginIn", "LoginOut", "MeOut",
+    "AccountCreate", "AccountOut", "AccountUpdate",
+    "CategoryCreate", "CategoryOut", "CategoryUpdate",
+    "MerchantRuleCreate", "MerchantRuleOut", "MerchantRuleUpdate",
+    "StatementImportOut", "StatementImportListOut", "ImportResponse", "ReviewBundle",
+    "TransactionOut", "TransactionListOut", "TransactionPatchIn",
+    "TransactionQuery", "BulkUpdateByMerchantIn", "BulkUpdateResult",
+    "DedupPairOut", "PendingPairListOut", "DedupDecisionIn",
+    "SummaryOut", "SummaryBreakdownItem",
+]
