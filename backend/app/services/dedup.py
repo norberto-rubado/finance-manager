@@ -318,3 +318,104 @@ def bridge_alipay_to_bank(
 
     db.flush()
     return pairs_created
+
+
+_CONVERSATION_RATIO_THRESHOLD = 70
+
+
+def conversation_match(
+    db: Session, *, user_id: int, new_tx_ids: list[int],
+) -> list[DedupCandidate]:
+    """spec § 6.5 ⑤:新进的账单交易 vs 已有 conversation 录入交易。
+
+    匹配条件:同金额 + ±1d + ratio>=70。命中 → conversation/pending pair。
+    """
+    if not new_tx_ids:
+        return []
+
+    pairs_created: list[DedupCandidate] = []
+
+    new_txs = db.execute(
+        select(Transaction).where(
+            Transaction.id.in_(new_tx_ids),
+            Transaction.user_id == user_id,
+            Transaction.source != "conversation",  # 自身不是 conversation
+            Transaction.is_mirror.is_(False),
+        )
+    ).scalars().all()
+
+    for x in new_txs:
+        cands = db.execute(
+            select(Transaction).where(
+                Transaction.user_id == user_id,
+                Transaction.source == "conversation",
+                Transaction.is_mirror.is_(False),
+                Transaction.amount == x.amount,
+                Transaction.currency == x.currency,
+                Transaction.tx_time >= x.tx_time - _ONE_DAY,
+                Transaction.tx_time <= x.tx_time + _ONE_DAY,
+            )
+        ).scalars().all()
+
+        for c in cands:
+            ratio = fuzz.WRatio(x.merchant_normalized or "", c.merchant_normalized or "")
+            if ratio < _CONVERSATION_RATIO_THRESHOLD:
+                continue
+            pair = _make_pair(
+                user_id, primary_id=c.id, mirror_id=x.id,
+                match_kind="conversation", confidence=min(0.95, ratio / 100.0),
+                status="pending",
+                reasoning={
+                    "rule": "conversation_match",
+                    "signals": ["amount_eq", "tx_time_within_1d", f"ratio={ratio}"],
+                },
+            )
+            db.add(pair)
+            pairs_created.append(pair)
+            break  # 同 x 只配一条 conversation
+
+    db.flush()
+    return pairs_created
+
+
+def run_dedup_pass(
+    db: Session, *, user_id: int, new_tx_ids: list[int],
+) -> list[DedupCandidate]:
+    """spec § 6 总入口:② → ③ → ④ → ⑤ 顺序处理新进 tx。
+
+    ① 同源跳过已在 importer.persist_raw_transactions 处理。
+    """
+    if not new_tx_ids:
+        return []
+
+    all_pairs: list[DedupCandidate] = []
+
+    # ② 微信→银行 — 仅取 wechat 的新进 ids
+    wechat_ids = [
+        row[0] for row in db.execute(
+            select(Transaction.id).where(
+                Transaction.id.in_(new_tx_ids),
+                Transaction.source == "wechat",
+            )
+        ).all()
+    ]
+    all_pairs.extend(wechat_to_bank_anchor(db, user_id=user_id, new_wechat_ids=wechat_ids))
+
+    # ③ 强重复 — 全量新进 ids,内部按 source 不同过滤
+    all_pairs.extend(strong_dedup_cross_source(db, user_id=user_id, new_tx_ids=new_tx_ids))
+
+    # ④ 桥接 — 仅取 bank 的新进 ids
+    bank_ids = [
+        row[0] for row in db.execute(
+            select(Transaction.id).where(
+                Transaction.id.in_(new_tx_ids),
+                Transaction.source == "bank",
+            )
+        ).all()
+    ]
+    all_pairs.extend(bridge_alipay_to_bank(db, user_id=user_id, new_bank_ids=bank_ids))
+
+    # ⑤ 对话↔账单 — 全量新进 ids,内部排除 source=conversation
+    all_pairs.extend(conversation_match(db, user_id=user_id, new_tx_ids=new_tx_ids))
+
+    return all_pairs
