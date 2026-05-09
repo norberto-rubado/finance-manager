@@ -121,6 +121,11 @@ class AlipayCsvParser:
         if missing:
             raise ValueError(f"alipay csv missing columns: {missing}")
 
+        if not any(k.startswith("金额") for k in raw_header):
+            raise ValueError(
+                f"alipay csv missing amount column (金额...) in header: {raw_header}"
+            )
+
         # 用 csv.DictReader 解析（表头行 + 数据行重新组合）
         combined = "\n".join([",".join(raw_header)] + data_lines)
         reader = csv.DictReader(StringIO(combined), fieldnames=raw_header)

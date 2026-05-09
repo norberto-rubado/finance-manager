@@ -119,3 +119,12 @@ def test_parse_invalid_bytes_raises(parser: AlipayCsvParser):
     """乱码字节应 raise ValueError 而非吞错。"""
     with pytest.raises(ValueError):
         parser.parse(b"\x00\x01\x02 not a csv at all")
+
+
+def test_parse_undecodable_bytes_raises_decode_error(parser: AlipayCsvParser):
+    """构造一个 GBK + GB18030 都解不了的字节序列,触发 decode 失败路径。"""
+    # 0xFF 是 GBK/GB18030 中的非法字节（illegal multibyte sequence）
+    # GBK 与 GB18030 均无法解码含 0xFF 的字节流
+    bad = b"\xff\xfe" * 200
+    with pytest.raises(ValueError, match="decode"):
+        parser.parse(bad)
