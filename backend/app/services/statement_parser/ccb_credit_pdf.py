@@ -127,8 +127,8 @@ def _split_channel_prefix(desc: str) -> tuple[str | None, str]:
         return None, desc
     merchant = (m.group(3) or "").strip()
     if not merchant:
-        # 仅前缀无后续(罕见),用原 desc 当 merchant
-        return desc, desc
+        # 仅前缀无后续(罕见):channel 保留原 desc,merchant 留空避免把前缀当商户名
+        return desc, ""
     return desc, merchant
 
 
@@ -330,7 +330,7 @@ class CcbCreditPdfParser:
                     description_raw=desc or None,
                     external_tx_id=None,        # 建行 PDF 不暴露交易流水号
                     external_merchant_id=None,
-                    payment_method_raw=channel,  # "财付通" 或 "支付宝" 或 None
+                    payment_method_raw=channel,  # 完整原始描述(如 "财付通-luckin coffee") 或 None
                     raw_row=r,
                 ))
                 all_times.append(tx_time)
