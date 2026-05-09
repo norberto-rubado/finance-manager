@@ -8,6 +8,7 @@ from app.api import categories as categories_api
 from app.api import dedup as dedup_api
 from app.api import rules as rules_api
 from app.api import statements as statements_api
+from app.api import summary as summary_api
 from app.api import transactions as transactions_api
 from app.core.db import engine
 
@@ -35,4 +36,5 @@ api_router.include_router(dedup_api.router)
 api_router.include_router(accounts_api.router)
 api_router.include_router(categories_api.router)
 api_router.include_router(rules_api.router)
+api_router.include_router(summary_api.router)
 app.include_router(api_router)
