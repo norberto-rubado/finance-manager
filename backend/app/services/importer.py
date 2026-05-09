@@ -6,12 +6,13 @@
 - Task 15:run_import_pipeline(总编排:parser → setup → persist → dedup → classify)
 """
 import hashlib
+from typing import Iterable
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Account, StatementImport
-from app.services.statement_parser import AccountHint, ParseResult
+from app.models import Account, StatementImport, Transaction
+from app.services.statement_parser import AccountHint, ParseResult, RawTransaction, normalize_merchant
 
 
 class DuplicateImportError(ValueError):
@@ -117,3 +118,111 @@ def ensure_statement_import(
     db.add(si)
     db.flush()
     return si
+
+
+# ---------------------------------------------------------------------------
+# Task 9: persist_raw_transactions
+# ---------------------------------------------------------------------------
+
+_SOURCE_TYPE_TO_SOURCE = {
+    "alipay_csv": "alipay",
+    "wechat_xlsx": "wechat",
+    "bank_pdf_bocom_debit": "bank",
+    "bank_pdf_ccb_credit": "bank",
+}
+
+
+def _short_source(source_type: str) -> str:
+    """source_type -> source 短名(spec § 4.1)。"""
+    if source_type in _SOURCE_TYPE_TO_SOURCE:
+        return _SOURCE_TYPE_TO_SOURCE[source_type]
+    raise ValueError(f"unknown source_type: {source_type!r}")
+
+
+def _synth_unique_key(
+    source_short: str, statement_import_id: int, row_idx: int,
+    merchant: str, amount, tx_time,
+) -> str:
+    """external_tx_id 缺失时合成 unique key。
+
+    用 statement_import_id + row_idx 保证 file 内唯一,加 sha8 防 file 间罕见撞。
+    """
+    sig = f"{merchant}|{amount}|{tx_time.isoformat()}".encode()
+    sha8 = hashlib.sha256(sig).hexdigest()[:8]
+    return f"{source_short}:si{statement_import_id}:r{row_idx}:{sha8}"
+
+
+def persist_raw_transactions(
+    db: Session,
+    *,
+    user_id: int,
+    account_id: int,
+    statement_import_id: int,
+    source_type: str,
+    raw_transactions: Iterable[RawTransaction],
+) -> tuple[int, int]:
+    """把 RawTransaction 列表批量 insert。
+
+    返回 (created_count, skipped_count_due_to_dup_unique_key)。
+    spec § 5.1 step 4 + § 6.1 ①(同源跳过)。
+
+    本函数只**插入数据**,不做跨源去重(Task 10-13)和分类(Task 14)。
+    """
+    source_short = _short_source(source_type)
+
+    # 拉一次该 user 已存在的 source_unique_key 集合,避免 N+1 查询
+    seen: set[str] = set(
+        row[0] for row in db.execute(
+            select(Transaction.source_unique_key).where(
+                Transaction.user_id == user_id,
+                Transaction.source_unique_key.isnot(None),
+            )
+        ).all() if row[0] is not None
+    )
+
+    created = 0
+    skipped = 0
+    for idx, raw in enumerate(raw_transactions):
+        if raw.external_tx_id:
+            unique_key = f"{source_short}:{raw.external_tx_id}"
+        else:
+            unique_key = _synth_unique_key(
+                source_short, statement_import_id, idx,
+                raw.merchant_raw or "", raw.amount, raw.tx_time,
+            )
+        if unique_key in seen:
+            skipped += 1
+            continue
+        seen.add(unique_key)
+
+        merchant_norm = normalize_merchant(raw.merchant_raw)
+        tx = Transaction(
+            user_id=user_id,
+            account_id=account_id,
+            statement_import_id=statement_import_id,
+            tx_kind=raw.tx_kind,
+            tx_time=raw.tx_time,
+            post_time=raw.post_time,
+            amount=raw.amount,
+            currency=raw.currency,
+            amount_settled_cny=raw.amount_settled_cny,
+            merchant_raw=raw.merchant_raw or None,
+            merchant_normalized=merchant_norm or None,
+            counterparty_raw=raw.counterparty_raw,
+            description_raw=raw.description_raw,
+            category_id=None,
+            classification_confidence=None,
+            source=source_short,
+            external_tx_id=raw.external_tx_id,
+            external_merchant_id=raw.external_merchant_id,
+            payment_method_raw=raw.payment_method_raw,
+            is_mirror=False,
+            mirror_of_id=None,
+            source_unique_key=unique_key,
+            raw_payload=raw.raw_row,
+        )
+        db.add(tx)
+        created += 1
+
+    db.flush()
+    return created, skipped
