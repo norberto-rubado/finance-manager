@@ -1,7 +1,10 @@
-export default function HomePlaceholder() {
+import { Shell } from '@/components/layout/shell';
+
+export default function HomePage() {
   return (
-    <div className="flex min-h-screen items-center justify-center">
-      <p className="text-muted-foreground">Home placeholder — implemented in Task 9.</p>
-    </div>
+    <Shell>
+      <h1 className="text-2xl font-semibold">首页</h1>
+      <p className="mt-4 text-muted-foreground">实施 Task 9-10。</p>
+    </Shell>
   );
 }
