@@ -10,6 +10,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -61,7 +62,8 @@ class Transaction(Base, TimestampMixin):
     raw_payload: Mapped[dict | None] = mapped_column(JSONB)
 
     __table_args__ = (
-        Index("ix_transactions_user_tx_time", "user_id", "tx_time"),
+        # spec § 4.2:主查询路径(交易列表按时间倒序翻页),DESC 让 PG 直接走 index scan
+        Index("ix_transactions_user_tx_time", "user_id", text("tx_time DESC")),
         Index("ix_transactions_user_account_time", "user_id", "account_id", "tx_time"),
         Index("ix_transactions_user_merchant_norm", "user_id", "merchant_normalized"),
     )
