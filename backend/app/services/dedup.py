@@ -11,6 +11,7 @@
 """
 import re
 from datetime import datetime, timedelta
+from decimal import Decimal
 
 from rapidfuzz import fuzz
 from sqlalchemy import select
@@ -210,6 +211,110 @@ def strong_dedup_cross_source(
             db.add(pair)
             pairs_created.append(pair)
             break  # 同 tx 一旦匹配到,不重复配
+
+    db.flush()
+    return pairs_created
+
+
+_BRIDGE_KEYWORDS = ("支付宝", "蚂蚁", "拉扎斯", "云闪付", "支付平台", "财付通")
+
+
+def _has_bridge_keyword(merchant: str | None) -> bool:
+    if not merchant:
+        return False
+    return any(k in merchant for k in _BRIDGE_KEYWORDS)
+
+
+def _greedy_aggregate(target: Decimal, items: list[Transaction]) -> list[Transaction]:
+    """从 items 里贪心选若干条,使金额之和 == target。
+
+    策略:按 amount 降序排序,逐个累加;若超过 target 跳过,刚好等于 target 即返回。
+    本切片用最朴素的"降序贪心+回溯"足以满足 spec(支付宝→银行同日聚合)。
+    返回空列表表示无解。
+    """
+    if not items:
+        return []
+    sorted_items = sorted(items, key=lambda x: -x.amount)
+    chosen: list[Transaction] = []
+    remaining = target
+    for it in sorted_items:
+        if it.amount <= remaining:
+            chosen.append(it)
+            remaining -= it.amount
+            if remaining == Decimal("0"):
+                return chosen
+    return []  # 没凑出
+
+
+def bridge_alipay_to_bank(
+    db: Session, *, user_id: int, new_bank_ids: list[int],
+) -> list[DedupCandidate]:
+    """spec § 6.4 ④:对新进银行交易,若 merchant 含中转方关键词,在 ±1d alipay 候选里:
+
+    - 单笔等额 → bridge pending,confidence=0.85
+    - 多笔贪心聚合 → 每条都开 bridge pending,confidence=0.65
+    """
+    if not new_bank_ids:
+        return []
+
+    pairs_created: list[DedupCandidate] = []
+
+    bank_txs = db.execute(
+        select(Transaction).where(
+            Transaction.id.in_(new_bank_ids),
+            Transaction.user_id == user_id,
+            Transaction.source == "bank",
+        )
+    ).scalars().all()
+
+    for b in bank_txs:
+        if not _has_bridge_keyword(b.merchant_raw):
+            continue
+        cands = db.execute(
+            select(Transaction).where(
+                Transaction.user_id == user_id,
+                Transaction.source == "alipay",
+                Transaction.is_mirror.is_(False),
+                Transaction.currency == b.currency,
+                Transaction.tx_time >= b.tx_time - _ONE_DAY,
+                Transaction.tx_time <= b.tx_time + _ONE_DAY,
+            )
+        ).scalars().all()
+
+        # a) 优先单笔等额
+        single_match = next((c for c in cands if c.amount == b.amount), None)
+        if single_match is not None:
+            pair = _make_pair(
+                user_id, primary_id=single_match.id, mirror_id=b.id,
+                match_kind="bridge", confidence=0.85, status="pending",
+                reasoning={
+                    "rule": "bridge_alipay_to_bank",
+                    "signals": ["bridge_keyword_in_bank_merchant",
+                                "single_alipay_amount_eq", "tx_time_within_1d"],
+                    "alipay_tx_id": single_match.id,
+                },
+            )
+            db.add(pair)
+            pairs_created.append(pair)
+            continue
+
+        # b) 贪心聚合
+        agg = _greedy_aggregate(b.amount, cands)
+        if agg:
+            for a in agg:
+                pair = _make_pair(
+                    user_id, primary_id=a.id, mirror_id=b.id,
+                    match_kind="bridge", confidence=0.65, status="pending",
+                    reasoning={
+                        "rule": "bridge_alipay_to_bank",
+                        "signals": ["bridge_keyword_in_bank_merchant",
+                                    "alipay_amount_sum_eq", "tx_time_within_1d",
+                                    f"aggregated_count={len(agg)}"],
+                        "aggregated_alipay_ids": [x.id for x in agg],
+                    },
+                )
+                db.add(pair)
+                pairs_created.append(pair)
 
     db.flush()
     return pairs_created
