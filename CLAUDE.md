@@ -49,5 +49,5 @@ slice C 已闭环 4 项(B-poly-1/2、I-5、Rec #5),后续切片如有新 polish 
 
 ## 仓库状态
 - 本地 git 仓库,**无 remote**(单人项目)
-- main 分支 24 commits(2 brainstorm/spec + 22 slice A)
+- main 分支 68 commits(2 brainstorm/spec + 22 slice A + 19 slice B + 25 slice C)
 - DoD 验证脚本:slice A 是 `backend/scripts/verify_slice_a.ps1`(从 finance-manager/ 根跑);后续切片各自添加 `verify_slice_X.ps1`
