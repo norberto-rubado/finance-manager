@@ -42,7 +42,10 @@ def _decide(db, user_id: int, pair_id: int, action: str) -> DedupCandidate:
             f"pair already {pair.status}")
     if action == "confirm":
         mirror = db.execute(
-            select(Transaction).where(Transaction.id == pair.mirror_tx_id)
+            select(Transaction).where(
+                Transaction.id == pair.mirror_tx_id,
+                Transaction.user_id == user_id,
+            )
         ).scalar_one()
         mirror.is_mirror = True
         mirror.mirror_of_id = pair.primary_tx_id
@@ -50,7 +53,10 @@ def _decide(db, user_id: int, pair_id: int, action: str) -> DedupCandidate:
     elif action == "reject":
         # 也要清掉 mirror 已被错误标的(② 多匹配场景下,可能两边都在 pending pair)
         mirror = db.execute(
-            select(Transaction).where(Transaction.id == pair.mirror_tx_id)
+            select(Transaction).where(
+                Transaction.id == pair.mirror_tx_id,
+                Transaction.user_id == user_id,
+            )
         ).scalar_one()
         if mirror.mirror_of_id == pair.primary_tx_id:
             mirror.is_mirror = False

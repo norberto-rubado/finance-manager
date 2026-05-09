@@ -104,7 +104,10 @@ def ensure_statement_import(
     spec § 5.1 step 2-4。imported/deduped/classified counts 在管道末尾(Task 15)更新。
     """
     existing = db.execute(
-        select(StatementImport).where(StatementImport.file_hash == file_hash)
+        select(StatementImport).where(
+            StatementImport.user_id == user_id,
+            StatementImport.file_hash == file_hash,
+        )
     ).scalar_one_or_none()
     if existing is not None:
         raise DuplicateImportError(
