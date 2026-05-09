@@ -2,14 +2,15 @@
 from fastapi import APIRouter, FastAPI
 from sqlalchemy import text
 
+from app.api import auth as auth_api
 from app.core.db import engine
 
 app = FastAPI(title="Finance Manager API", version="0.1.0")
 
-router = APIRouter(prefix="/api")
+api_router = APIRouter(prefix="/api")
 
 
-@router.get("/health")
+@api_router.get("/health")
 def health() -> dict:
     """健康检查:进程在 + db 可达。"""
     db_status = "ok"
@@ -21,4 +22,5 @@ def health() -> dict:
     return {"status": "ok", "version": app.version, "db": db_status}
 
 
-app.include_router(router)
+api_router.include_router(auth_api.router)
+app.include_router(api_router)
