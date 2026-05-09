@@ -13,7 +13,7 @@ spec § 5.3.4:
 - 交易币+金额 合并在同列,格式 "人民币元/518.00" 或 "欧元/6.25"
 - pdfplumber 将所有数据行合并为单行,各字段值以 '\\n' 分隔
 - 列头含双语(中文\\n英文),以英文部分做可靠识别
-- 中文字符在 Python 内部存储为正确 UTF-8(U+xxxx),但 Windows 终端显示乱码
+- 解析逻辑:pdfplumber 抽取的是标准 UTF-8,直接用子串匹配(slice C B-poly-1 修复)
 """
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
@@ -31,8 +31,6 @@ from app.services.statement_parser.base import (
 # ── 检测标记 ────────────────────────────────────────────────────────────────
 # 建行 PDF 英文页眉可靠存在
 _CCB_MARKERS_EN = ["Credit Card Transaction Details", "China Construction Bank"]
-# 建行 Unicode 关键字: "建设银行" U+5efa U+8bbe U+94f6 U+884c
-_CCB_MARKER_ZH_CP = (0x5efa, 0x8bbe, 0x94f6, 0x884c)  # 建 设 银 行(简体)
 
 # ── 交行检测排除标记 ──────────────────────────────────────────────────────────
 # 交通银行 英文: Bank of Communications
@@ -41,73 +39,44 @@ _BOCOM_MARKER_EN = "Bank of Communications"
 # ── 日期 ────────────────────────────────────────────────────────────────────
 _DATE8_RE = re.compile(r"\b(\d{8})\b")
 
-# ── 银联入账关键词(U+94f6 U+8054 U+5165 U+8d26 = 银联入账) ──────────────────
+# ── 银联入账关键词 ────────────────────────────────────────────────────────────
 # 必须用子串匹配,不能用 codepoint set(否则乱序字符串如"联银账入"会误判)
 _REPAYMENT_KEYWORD = "银联入账"
 
-# ── 银联入账 codepoints (银联入账 = U+94f6 U+8054 U+5165 U+8d26) ─────────
-_YINLIAN_CP = (0x94f6, 0x8054)          # 银联 (前两字即可定位)
-_RUZHANG_CP = (0x5165, 0x8d26)          # 入账
+# ── 通道前缀正则(支持 ASCII 和全角破折号) ────────────────────────────────────
+_CHANNEL_PREFIX_RE = re.compile(r"^(财付通|支付宝)([\-—－＝]\s*)?(.*)$")
 
-# ── 通道前缀 ─────────────────────────────────────────────────────────────────
-# 财付通 U+8d22 U+4ed8 U+901a
-_CAIFUTONG_CP = (0x8d22, 0x4ed8, 0x901a)
-# 支付宝 U+652f U+4ed8 U+5b9d
-_ZHIFUBAO_CP = (0x652f, 0x4ed8, 0x5b9d)
-
-# ── 货币映射(中文名 → ISO 4217),以首个码点集合识别 ────────────────────────
-# 人民币元: 人 U+4eba  民 U+6c11  币 U+5e01
-# 欧元:     欧 U+6b27  元 U+5143
-# 港元/香港元: 港 U+6e2f 或 香 U+9999 + 港 U+6e2f
-# 美元:     美 U+7f8e  元 U+5143
-# 日元:     日 U+65e5  元 U+5143
-# 英镑:     英 U+82f1
-# 澳元:     澳 U+6fb3
+# ── 货币映射(中文名 → ISO 4217)。优先匹配长串(港币/人民币)避免短串先命中 ───
+_CURRENCY_MAP: list[tuple[str, str]] = [
+    ("人民币", "CNY"),
+    ("香港元", "HKD"),
+    ("港币", "HKD"),
+    ("港元", "HKD"),
+    ("香港", "HKD"),
+    ("美元", "USD"),
+    ("欧元", "EUR"),
+    ("日元", "JPY"),
+    ("英镑", "GBP"),
+    ("澳元", "AUD"),
+    ("RMB", "CNY"),
+]
 
 _DEFAULT_LAST4 = "7432"
 
 
-def _has_codepoints(s: str, cps: tuple) -> bool:
-    """字符串 s 是否包含所有码点(顺序不要求连续)。"""
-    cp_set = {ord(c) for c in s}
-    return all(cp in cp_set for cp in cps)
-
-
-def _starts_with_codepoints(s: str, cps: tuple) -> bool:
-    """字符串 s 的开头 len(cps) 个字符是否依次等于 cps 中各码点。"""
-    if len(s) < len(cps):
-        return False
-    return all(ord(s[i]) == cps[i] for i in range(len(cps)))
-
-
 def _identify_currency(curr_str: str) -> str:
-    """从中文币种名称转为 ISO 4217 代码。"""
-    cp_set = {ord(c) for c in curr_str}
-    # 人民币: 包含 人(4eba) 或 民(6c11)
-    if 0x4eba in cp_set or 0x6c11 in cp_set:
+    """从币种字符串(中文名 / ISO 代码)转 ISO 4217 三字母代码。"""
+    s = (curr_str or "").strip()
+    if not s:
         return "CNY"
-    # 欧元: 欧(6b27)
-    if 0x6b27 in cp_set:
-        return "EUR"
-    # 港元/香港元: 港(6e2f) 或 香(9999)
-    if 0x6e2f in cp_set or 0x9999 in cp_set:
-        return "HKD"
-    # 美元: 美(7f8e)
-    if 0x7f8e in cp_set:
-        return "USD"
-    # 日元: 日(65e5)
-    if 0x65e5 in cp_set:
-        return "JPY"
-    # 英镑: 英(82f1)
-    if 0x82f1 in cp_set:
-        return "GBP"
-    # 澳元: 澳(6fb3)
-    if 0x6fb3 in cp_set:
-        return "AUD"
-    # 已是 ASCII ISO 代码(如 USD/EUR)
-    if curr_str.isascii() and len(curr_str) == 3:
-        return curr_str.upper()
-    return curr_str  # 未知,原样返回
+    # 优先按长串子串匹配
+    for cn_name, iso in _CURRENCY_MAP:
+        if cn_name in s:
+            return iso
+    # 已是 3 字母 ASCII(如 USD/EUR)→ 大写返回
+    if s.isascii() and len(s) == 3:
+        return s.upper()
+    return s  # 未知,原样返回(测试会发现)
 
 
 def _parse_curr_amt(cell: str) -> tuple[str, Decimal]:
@@ -144,39 +113,23 @@ def _parse_yyyymmdd(s: str) -> datetime | None:
 
 
 def _split_channel_prefix(desc: str) -> tuple[str | None, str]:
-    """检查描述是否以财付通- 或 支付宝- 开头。
+    """检查描述是否以"财付通"或"支付宝"开头(可带破折号)。
 
-    返回 (channel_label, merchant_after_strip)。
-    - channel_label: 原始通道名(含破折号及后续内容作为完整存证)
-    - merchant_after_strip: 剥去前缀后的商户名
+    返回 (channel_prefix_full, merchant_after_strip):
+    - "财付通-luckin coffee"  → ("财付通-luckin coffee", "luckin coffee")
+    - "支付宝中国移动"        → ("支付宝中国移动", "中国移动")
+    - "瑞幸咖啡"              → (None, "瑞幸咖啡")
     """
     if not desc:
         return None, ""
-
-    # 财付通 (U+8d22 U+4ed8 U+901a) + 分隔符 + 商户
-    if _starts_with_codepoints(desc, _CAIFUTONG_CP):
-        # 找到分隔符(- 或 — 或其他)
-        rest = desc[3:]  # 跳过财付通
-        if rest and rest[0] in "-—－＝":
-            merchant = rest[1:]
-            channel = "财付通"
-        else:
-            merchant = rest
-            channel = "财付通"
-        return channel, merchant
-
-    # 支付宝 (U+652f U+4ed8 U+5b9d) + 分隔符 + 商户
-    if _starts_with_codepoints(desc, _ZHIFUBAO_CP):
-        rest = desc[3:]  # 跳过支付宝
-        if rest and rest[0] in "-—－＝":
-            merchant = rest[1:]
-            channel = "支付宝"
-        else:
-            merchant = rest
-            channel = "支付宝"
-        return channel, merchant
-
-    return None, desc
+    m = _CHANNEL_PREFIX_RE.match(desc)
+    if not m:
+        return None, desc
+    merchant = (m.group(3) or "").strip()
+    if not merchant:
+        # 仅前缀无后续(罕见),用原 desc 当 merchant
+        return desc, desc
+    return desc, merchant
 
 
 def _is_repayment(desc: str) -> bool:
@@ -191,14 +144,12 @@ def _is_repayment(desc: str) -> bool:
 
 
 def _is_ccb_text(text: str) -> bool:
-    """文字中是否有建行特征。"""
-    # 英文标记最可靠
+    """文本中是否有建行特征(英文标记 / 中文'建设银行')。"""
+    if not text:
+        return False
     if any(m in text for m in _CCB_MARKERS_EN):
         return True
-    # 中文建设银行
-    if _has_codepoints(text, _CCB_MARKER_ZH_CP):
-        return True
-    return False
+    return "建设银行" in text
 
 
 class CcbCreditPdfParser:
@@ -391,7 +342,7 @@ class CcbCreditPdfParser:
                 raw_transactions=txs,
                 account_hint=AccountHint(
                     type="bank_credit",
-                    institution="建设银行",  # U+5efa U+8bbe U+94f6 U+884c
+                    institution="建设银行",
                     last4=last4,
                 ),
                 period_start=period_start,

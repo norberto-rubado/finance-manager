@@ -136,37 +136,12 @@ def test_parse_invalid_pdf_raises(parser: CcbCreditPdfParser):
 from decimal import Decimal
 
 from app.services.statement_parser.ccb_credit_pdf import (
-    _has_codepoints,
-    _starts_with_codepoints,
     _identify_currency,
     _parse_curr_amt,
     _parse_yyyymmdd,
     _split_channel_prefix,
     _is_repayment,
 )
-
-
-class TestHasCodepoints:
-    def test_all_present(self):
-        # "AB" contains ord('A')=65, ord('B')=66
-        assert _has_codepoints("AB", (65, 66)) is True
-
-    def test_missing_one(self):
-        assert _has_codepoints("A", (65, 66)) is False
-
-    def test_empty_string(self):
-        assert _has_codepoints("", (65,)) is False
-
-
-class TestStartsWithCodepoints:
-    def test_matches(self):
-        assert _starts_with_codepoints("AB", (65, 66)) is True
-
-    def test_too_short(self):
-        assert _starts_with_codepoints("A", (65, 66)) is False
-
-    def test_wrong_order(self):
-        assert _starts_with_codepoints("BA", (65, 66)) is False
 
 
 class TestIdentifyCurrency:
@@ -277,29 +252,27 @@ class TestSplitChannelPrefix:
         assert merchant == ""
 
     def test_caifutong_with_dash(self):
-        # 财付通 = U+8d22 U+4ed8 U+901a
         desc = "财付通-SomeMerchant"
         channel, merchant = _split_channel_prefix(desc)
-        assert channel == "财付通"
+        assert channel == desc          # 完整 desc 作为 channel_prefix_full
         assert merchant == "SomeMerchant"
 
     def test_caifutong_without_dash(self):
         desc = "财付通SomeMerchant"
         channel, merchant = _split_channel_prefix(desc)
-        assert channel == "财付通"
+        assert channel == desc          # 完整 desc 作为 channel_prefix_full
         assert merchant == "SomeMerchant"
 
     def test_zhifubao_with_dash(self):
-        # 支付宝 = U+652f U+4ed8 U+5b9d
         desc = "支付宝-SomeMerchant"
         channel, merchant = _split_channel_prefix(desc)
-        assert channel == "支付宝"
+        assert channel == desc          # 完整 desc 作为 channel_prefix_full
         assert merchant == "SomeMerchant"
 
     def test_zhifubao_without_dash(self):
         desc = "支付宝SomeMerchant"
         channel, merchant = _split_channel_prefix(desc)
-        assert channel == "支付宝"
+        assert channel == desc          # 完整 desc 作为 channel_prefix_full
         assert merchant == "SomeMerchant"
 
 
