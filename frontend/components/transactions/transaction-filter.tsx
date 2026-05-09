@@ -1,5 +1,24 @@
 'use client';
 
+/**
+ * **Breakpoint 选择(Task 12 → Task 13 polish):**
+ *
+ * Plan 原稿用 `lg:` 断点(1024px)切换 sidebar / drawer。本实现统一用 `md:`(768px),
+ * 与表格、内容栅格的响应式断点保持一致 —— 在 iPad 竖屏 (768px) 这种"中等宽度"
+ * 用例下,sidebar + table 双栏比抽屉式更顺手,空间也容得下。
+ * Task 12 review 中确认此偏离;此处显式记录。
+ *
+ * **导出拆分(Task 13 polish A):**
+ *
+ * 原 `<TransactionFilter>` 单一组件同时挂载桌面 sidebar 和手机 Sheet trigger,
+ * 导致 page.tsx 必须把它放在 flex 容器内,trigger 在手机上落到内容区左上角,
+ * 与 h1 "交易" 视觉错位。Task 13 拆成两个 export:
+ * - `<TransactionFilterSidebar>`:桌面 sidebar(>= md)
+ * - `<TransactionFilterTrigger>`:手机 Sheet 触发按钮(< md);page.tsx 把它挂到 h1 旁
+ *
+ * 共享内部 `FilterFields` 组件 + `useFilterMeta` hook(账户/分类字典)。
+ */
+
 import { useEffect, useState } from 'react';
 import { Filter as FilterIcon } from 'lucide-react';
 
@@ -62,6 +81,24 @@ function countActive(v: FilterValues): number {
 // 我们用 __all__ / __none__ 作为哨兵。
 const ALL = '__all__';
 const NONE = '__none__';
+
+/** 共享:加载账户/分类字典(只读,变化少,组件挂载时一次性拉)。 */
+function useFilterMeta() {
+  const [accounts, setAccounts] = useState<AccountOut[]>([]);
+  const [categories, setCategories] = useState<CategoryOut[]>([]);
+
+  useEffect(() => {
+    Promise.all([
+      listAccounts().catch(() => ({ items: [], total: 0 })),
+      listCategories().catch(() => ({ items: [], total: 0 })),
+    ]).then(([acc, cat]) => {
+      setAccounts(acc.items);
+      setCategories(cat.items);
+    });
+  }, []);
+
+  return { accounts, categories };
+}
 
 function FilterFields({
   value,
@@ -200,83 +237,83 @@ function FilterFields({
 }
 
 /**
- * **TransactionFilter** — 双形态(桌面 sidebar + 手机 Sheet drawer)。
- *
- * 责任仅在 UI 层,所有状态由 page.tsx 通过 URL 同步管理。账户 / 分类列表在
- * 组件内部一次性拉取(纯只读字典),变化少。
+ * **桌面侧栏(>= md)。** 在 page.tsx 的双栏 flex 里挂载一次。
+ * 手机视口下整个 aside 自动 hidden,不影响布局。
  */
-export function TransactionFilter({
+export function TransactionFilterSidebar({
   value,
   onChange,
 }: {
   value: FilterValues;
   onChange: (next: FilterValues) => void;
 }) {
-  const [accounts, setAccounts] = useState<AccountOut[]>([]);
-  const [categories, setCategories] = useState<CategoryOut[]>([]);
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    Promise.all([
-      listAccounts().catch(() => ({ items: [], total: 0 })),
-      listCategories().catch(() => ({ items: [], total: 0 })),
-    ]).then(([acc, cat]) => {
-      setAccounts(acc.items);
-      setCategories(cat.items);
-    });
-  }, []);
-
+  const { accounts, categories } = useFilterMeta();
   const activeCount = countActive(value);
 
   return (
-    <>
-      {/* 桌面:左侧 sidebar(>= md)。 */}
-      <aside className="hidden w-64 shrink-0 md:block">
-        <div className="sticky top-4 rounded-md border bg-card p-4">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold">筛选</h2>
-            {activeCount > 0 && (
-              <Badge variant="secondary">{activeCount}</Badge>
-            )}
-          </div>
-          <FilterFields
-            value={value}
-            onChange={onChange}
-            accounts={accounts}
-            categories={categories}
-          />
+    <aside className="hidden w-64 shrink-0 md:block">
+      <div className="sticky top-4 rounded-md border bg-card p-4">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-sm font-semibold">筛选</h2>
+          {activeCount > 0 && <Badge variant="secondary">{activeCount}</Badge>}
         </div>
-      </aside>
-
-      {/* 手机:触发按钮 + Sheet drawer(< md)。 */}
-      <div className="md:hidden">
-        <Sheet open={open} onOpenChange={setOpen}>
-          <SheetTrigger asChild>
-            <Button variant="outline" size="sm">
-              <FilterIcon className="mr-2 h-4 w-4" />
-              筛选
-              {activeCount > 0 && (
-                <Badge variant="secondary" className="ml-2">
-                  {activeCount}
-                </Badge>
-              )}
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-sm">
-            <SheetHeader>
-              <SheetTitle>筛选</SheetTitle>
-            </SheetHeader>
-            <div className="mt-4">
-              <FilterFields
-                value={value}
-                onChange={onChange}
-                accounts={accounts}
-                categories={categories}
-              />
-            </div>
-          </SheetContent>
-        </Sheet>
+        <FilterFields
+          value={value}
+          onChange={onChange}
+          accounts={accounts}
+          categories={categories}
+        />
       </div>
-    </>
+    </aside>
+  );
+}
+
+/**
+ * **手机筛选触发按钮(< md)。** 在 page.tsx 的 header 里挂载,点击展开 Sheet。
+ * 桌面视口下整个按钮 hidden,不影响布局。
+ */
+export function TransactionFilterTrigger({
+  value,
+  onChange,
+}: {
+  value: FilterValues;
+  onChange: (next: FilterValues) => void;
+}) {
+  const { accounts, categories } = useFilterMeta();
+  const [open, setOpen] = useState(false);
+  const activeCount = countActive(value);
+
+  return (
+    <div className="md:hidden">
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetTrigger asChild>
+          <Button variant="outline" size="sm">
+            <FilterIcon className="mr-2 h-4 w-4" />
+            筛选
+            {activeCount > 0 && (
+              <Badge variant="secondary" className="ml-2">
+                {activeCount}
+              </Badge>
+            )}
+          </Button>
+        </SheetTrigger>
+        <SheetContent
+          side="right"
+          className="w-full overflow-y-auto sm:max-w-sm"
+        >
+          <SheetHeader>
+            <SheetTitle>筛选</SheetTitle>
+          </SheetHeader>
+          <div className="mt-4">
+            <FilterFields
+              value={value}
+              onChange={onChange}
+              accounts={accounts}
+              categories={categories}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
+    </div>
   );
 }

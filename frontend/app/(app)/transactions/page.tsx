@@ -6,10 +6,14 @@ import { toast } from 'sonner';
 
 import { EmptyState } from '@/components/common/empty-state';
 import { Pagination } from '@/components/common/pagination';
+import { BulkUpdateBar } from '@/components/transactions/bulk-update-bar';
+import { BulkUpdateDialog } from '@/components/transactions/bulk-update-dialog';
 import {
-  TransactionFilter,
+  TransactionFilterSidebar,
+  TransactionFilterTrigger,
   type FilterValues,
 } from '@/components/transactions/transaction-filter';
+import { TransactionCards } from '@/components/transactions/transaction-cards';
 import { TransactionTable } from '@/components/transactions/transaction-table';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -22,7 +26,7 @@ import type { TransactionOut, TransactionQuery } from '@/lib/api/types';
 const DEFAULT_LIMIT = 50;
 
 /**
- * 交易列表页(桌面表格 + 分页 + URL 同步)。
+ * 交易列表页(桌面表格 / 手机卡片 + 分页 + URL 同步 + 批量改类)。
  *
  * Next.js App Router 的 `useSearchParams()` 必须包在 `<Suspense>` 里才能 SSG —— 否则 build 报
  * "missing-suspense-with-csr-bailout";所以把读 search params 的逻辑下沉到子组件。
@@ -57,7 +61,7 @@ function TransactionsSkeleton() {
  *   (slice C 已知 gap),URL 状态保留但 API 调用时 drop —— Task 12 / 后端补丁解决。
  * - URL `?keyword=` 优先,兼容 `?search=` 过渡。
  *
- * Task 12 加筛选面板;Task 13 加手机卡片视图;Task 14 加编辑 dialog。
+ * Task 12 加筛选面板;Task 13 加手机卡片视图 + 批量改类 bar/dialog;Task 14 加编辑 dialog。
  */
 function TransactionsView() {
   const router = useRouter();
@@ -90,6 +94,13 @@ function TransactionsView() {
   const [categoryMap, setCategoryMap] = useState<Map<number, string>>(new Map());
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
+  // Task 13:批量改类 dialog 状态
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkDefaultMerchant, setBulkDefaultMerchant] = useState('');
+  // 触发 transactions 重抓的 key —— 改类成功后 +1 复用同一 useEffect,
+  // 避免在 onBulkSuccess 里重复 URL→API query 转换逻辑(DRY)。
+  const [refreshKey, setRefreshKey] = useState(0);
+
   // accounts / categories 一次性加载(数据变化少;Task 12 加筛选面板时复用)
   useEffect(() => {
     Promise.all([
@@ -101,10 +112,10 @@ function TransactionsView() {
     });
   }, []);
 
-  // transactions 跟随 filter 变化重抓
+  // transactions 跟随 filter / refreshKey 变化重抓
   useEffect(() => {
     setItems(null);
-    setSelectedIds(new Set()); // 翻页 / 改筛选时清掉选中
+    setSelectedIds(new Set()); // 翻页 / 改筛选 / 改类后清掉选中
     const offset = (filter.page - 1) * filter.limit;
     const apiQuery: TransactionQuery = {
       limit: filter.limit,
@@ -127,7 +138,7 @@ function TransactionsView() {
         toast.error('加载失败:' + e.message);
         setItems([]);
       });
-  }, [filter]);
+  }, [filter, refreshKey]);
 
   const updateFilter = useCallback(
     (patch: Record<string, string | number | undefined>) => {
@@ -184,18 +195,40 @@ function TransactionsView() {
     setSelectedIds(checked ? new Set(items.map((t) => t.id)) : new Set());
   };
 
+  // Task 13:批量改类 dialog 触发 / 成功后处理
+  const selectedItems = useMemo(
+    () => (items ?? []).filter((t) => selectedIds.has(t.id)),
+    [items, selectedIds],
+  );
+
+  const onBulkOpen = (m: string) => {
+    setBulkDefaultMerchant(m);
+    setBulkOpen(true);
+  };
+
+  const onBulkSuccess = () => {
+    setSelectedIds(new Set());
+    // 触发同一 useEffect 重抓(避免重复 URL→API 转换逻辑)
+    setRefreshKey((k) => k + 1);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">交易</h1>
-        {/* Task 13: 加批量操作 bar */}
+        {/* 手机:筛选触发按钮挂在 header 右侧,与 h1 视觉对齐(Task 13 polish A) */}
+        <TransactionFilterTrigger
+          value={filterValues}
+          onChange={onFilterChange}
+        />
       </div>
 
-      {/* 桌面 sidebar + 内容 双栏;手机 sidebar 不显示,由 TransactionFilter 内置 trigger 唤起 Sheet。
-          注意:TransactionFilter 内部已分别渲染桌面 aside(hidden md:block)和手机 Sheet trigger(md:hidden),
-          单次挂载即可同时支持两种形态。 */}
+      {/* 桌面 sidebar + 内容双栏;手机 sidebar 自动 hidden(md:block 控制)。 */}
       <div className="flex gap-4">
-        <TransactionFilter value={filterValues} onChange={onFilterChange} />
+        <TransactionFilterSidebar
+          value={filterValues}
+          onChange={onFilterChange}
+        />
         <div className="min-w-0 flex-1 space-y-4">
           {items === null && (
             <div className="space-y-2">
@@ -214,7 +247,7 @@ function TransactionsView() {
 
           {items && items.length > 0 && (
             <>
-              {/* 桌面表格;Task 13 加手机卡片视图 */}
+              {/* 桌面表格 */}
               <div className="hidden md:block">
                 <TransactionTable
                   items={items}
@@ -226,10 +259,16 @@ function TransactionsView() {
                   onEdit={() => toast.info('Task 14 实现编辑 dialog')}
                 />
               </div>
+              {/* 手机卡片(Task 13) */}
               <div className="md:hidden">
-                <p className="text-sm text-muted-foreground">
-                  手机卡片视图 — Task 13 实现
-                </p>
+                <TransactionCards
+                  items={items}
+                  accountMap={accountMap}
+                  categoryMap={categoryMap}
+                  selectedIds={selectedIds}
+                  onToggle={onToggle}
+                  onEdit={() => toast.info('Task 14 实现编辑 dialog')}
+                />
               </div>
               <Pagination
                 page={filter.page}
@@ -241,6 +280,20 @@ function TransactionsView() {
           )}
         </div>
       </div>
+
+      {/* Task 13:底部批量操作 bar(selectedItems.length === 0 时返回 null) */}
+      <BulkUpdateBar
+        selectedItems={selectedItems}
+        onClear={() => setSelectedIds(new Set())}
+        onBulkUpdate={onBulkOpen}
+      />
+      <BulkUpdateDialog
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        defaultMerchant={bulkDefaultMerchant}
+        selectedCount={selectedItems.length}
+        onSuccess={onBulkSuccess}
+      />
     </div>
   );
 }
