@@ -10,8 +10,9 @@
 公开入口 run_dedup_pass:Task 13 添加,顺序调用 ② → ③ → ④ → ⑤。
 """
 import re
-from datetime import timedelta
+from datetime import datetime, timedelta
 
+from rapidfuzz import fuzz
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -129,6 +130,86 @@ def wechat_to_bank_anchor(
                 )
                 db.add(pair)
                 pairs_created.append(pair)
+
+    db.flush()
+    return pairs_created
+
+
+_ONE_HOUR = timedelta(hours=1)
+_STRONG_RATIO_THRESHOLD = 80
+
+
+def strong_dedup_cross_source(
+    db: Session, *, user_id: int, new_tx_ids: list[int],
+) -> list[DedupCandidate]:
+    """spec § 6.3 ③:同/跨源 ±1h ratio≥80 强重复。
+
+    本算法:
+    - 仅处理 source 不同的 (A, B) 对
+    - 候选范围:本次新进 ids ∪ 已有未 mirror 交易,在新进 tx 时间窗口内
+    - 命中:auto-confirm,bank 那条优先标 mirror;若两侧都非 bank,后到的(created_at 大)标 mirror
+    """
+    if not new_tx_ids:
+        return []
+
+    pairs_created: list[DedupCandidate] = []
+
+    new_txs = db.execute(
+        select(Transaction).where(
+            Transaction.id.in_(new_tx_ids),
+            Transaction.user_id == user_id,
+            Transaction.is_mirror.is_(False),
+        )
+    ).scalars().all()
+
+    for tx in new_txs:
+        if tx.is_mirror:  # 在循环里被前面的 pair 标了
+            continue
+        # 在 ±1h、同金额、不同 source、未 mirror 中找候选
+        cands = db.execute(
+            select(Transaction).where(
+                Transaction.user_id == user_id,
+                Transaction.id != tx.id,
+                Transaction.is_mirror.is_(False),
+                Transaction.source != tx.source,
+                Transaction.amount == tx.amount,
+                Transaction.currency == tx.currency,
+                Transaction.tx_time >= tx.tx_time - _ONE_HOUR,
+                Transaction.tx_time <= tx.tx_time + _ONE_HOUR,
+            )
+        ).scalars().all()
+
+        for cand in cands:
+            ratio = fuzz.WRatio(tx.merchant_normalized or "", cand.merchant_normalized or "")
+            if ratio < _STRONG_RATIO_THRESHOLD:
+                continue
+            # 决定谁作 mirror:bank 优先;否则 created_at 大者(后到)
+            if tx.source == "bank" and cand.source != "bank":
+                primary, mirror = cand, tx
+            elif cand.source == "bank" and tx.source != "bank":
+                primary, mirror = tx, cand
+            else:
+                # 比 created_at,后到的标 mirror
+                primary, mirror = (
+                    (tx, cand) if (tx.created_at or datetime.min) <= (cand.created_at or datetime.min)
+                    else (cand, tx)
+                )
+            mirror.is_mirror = True
+            mirror.mirror_of_id = primary.id
+            pair = _make_pair(
+                user_id, primary_id=primary.id, mirror_id=mirror.id,
+                match_kind="strong", confidence=min(0.99, ratio / 100.0),
+                status="confirmed",
+                reasoning={
+                    "rule": "strong_dedup_cross_source",
+                    "signals": ["amount_eq", "currency_eq", "tx_time_within_1h",
+                                f"merchant_ratio={ratio}"],
+                    "ratio": ratio,
+                },
+            )
+            db.add(pair)
+            pairs_created.append(pair)
+            break  # 同 tx 一旦匹配到,不重复配
 
     db.flush()
     return pairs_created
