@@ -8,11 +8,20 @@ from app.models import Category, User
 
 @pytest.fixture
 def admin_user(db: Session) -> User:
-    """先建一个 admin user,让 categories.user_id FK 有引用对象。"""
-    user = User(username="admin", password_hash="$2b$12$dummy")
-    db.add(user)
-    db.commit()
-    return user
+    """Idempotent: 不论 db 里有没有 admin,都返回该 user。
+
+    用 ON CONFLICT 兼容 dev db 已有 admin 行的情况(savepoint 不能 rollback
+    constraint violation)。
+    """
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    stmt = (
+        pg_insert(User)
+        .values(username="admin", password_hash="$2b$12$dummy")
+        .on_conflict_do_nothing(index_elements=["username"])
+    )
+    db.execute(stmt)
+    db.flush()
+    return db.query(User).filter_by(username="admin").one()
 
 
 def test_seed_creates_categories(db: Session, admin_user: User):
