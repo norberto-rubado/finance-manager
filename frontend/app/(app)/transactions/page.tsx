@@ -6,6 +6,10 @@ import { toast } from 'sonner';
 
 import { EmptyState } from '@/components/common/empty-state';
 import { Pagination } from '@/components/common/pagination';
+import {
+  TransactionFilter,
+  type FilterValues,
+} from '@/components/transactions/transaction-filter';
 import { TransactionTable } from '@/components/transactions/transaction-table';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -137,6 +141,36 @@ function TransactionsView() {
     [router, sp],
   );
 
+  // ============ Task 12: filter ↔ FilterValues 映射 ============
+  // URL `is_mirror=false`(缺省)= 不含镜像;UI `include_mirror=true` = 含镜像。语义反转。
+  const filterValues: FilterValues = {
+    account_id: filter.account_id,
+    category_id: filter.category_id,
+    date_from: filter.date_from,
+    date_to: filter.date_to,
+    keyword: filter.keyword,
+    include_mirror: filter.is_mirror === undefined,
+  };
+
+  const onFilterChange = (next: FilterValues) => {
+    updateFilter({
+      page: 1, // 改筛选回到第一页
+      account_id: next.account_id,
+      // null 哨兵走字符串 'null';数字 id 直传;undefined 表示不过滤(移除 URL key)
+      category_id:
+        next.category_id === null
+          ? 'null'
+          : next.category_id === undefined
+            ? undefined
+            : next.category_id,
+      date_from: next.date_from,
+      date_to: next.date_to,
+      keyword: next.keyword,
+      // include_mirror=true → URL `?include_mirror=true`;false → 移除 key(默认排除)
+      include_mirror: next.include_mirror ? 'true' : undefined,
+    });
+  };
+
   const onToggle = (id: number) =>
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -154,46 +188,59 @@ function TransactionsView() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">交易</h1>
-        {/* Task 12: 这里加筛选触发按钮 / Task 13: 加批量操作 bar */}
+        {/* Task 13: 加批量操作 bar */}
       </div>
 
-      {items === null && (
-        <div className="space-y-2">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="h-10 w-full" />
-          ))}
-        </div>
-      )}
+      {/* 桌面 sidebar + 内容 双栏;手机 sidebar 不显示,由 TransactionFilter 内置 trigger 唤起 Sheet。
+          注意:TransactionFilter 内部已分别渲染桌面 aside(hidden md:block)和手机 Sheet trigger(md:hidden),
+          单次挂载即可同时支持两种形态。 */}
+      <div className="flex gap-4">
+        <TransactionFilter value={filterValues} onChange={onFilterChange} />
+        <div className="min-w-0 flex-1 space-y-4">
+          {items === null && (
+            <div className="space-y-2">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
+          )}
 
-      {items && items.length === 0 && (
-        <EmptyState title="无匹配交易" description="调整筛选条件,或先去导入账单" />
-      )}
-
-      {items && items.length > 0 && (
-        <>
-          {/* 桌面表格;Task 13 加手机卡片视图 */}
-          <div className="hidden md:block">
-            <TransactionTable
-              items={items}
-              accountMap={accountMap}
-              categoryMap={categoryMap}
-              selectedIds={selectedIds}
-              onToggle={onToggle}
-              onToggleAll={onToggleAll}
-              onEdit={() => toast.info('Task 14 实现编辑 dialog')}
+          {items && items.length === 0 && (
+            <EmptyState
+              title="无匹配交易"
+              description="调整筛选条件,或先去导入账单"
             />
-          </div>
-          <div className="md:hidden">
-            <p className="text-sm text-muted-foreground">手机卡片视图 — Task 13 实现</p>
-          </div>
-          <Pagination
-            page={filter.page}
-            limit={filter.limit}
-            total={total}
-            onPageChange={(p) => updateFilter({ page: p })}
-          />
-        </>
-      )}
+          )}
+
+          {items && items.length > 0 && (
+            <>
+              {/* 桌面表格;Task 13 加手机卡片视图 */}
+              <div className="hidden md:block">
+                <TransactionTable
+                  items={items}
+                  accountMap={accountMap}
+                  categoryMap={categoryMap}
+                  selectedIds={selectedIds}
+                  onToggle={onToggle}
+                  onToggleAll={onToggleAll}
+                  onEdit={() => toast.info('Task 14 实现编辑 dialog')}
+                />
+              </div>
+              <div className="md:hidden">
+                <p className="text-sm text-muted-foreground">
+                  手机卡片视图 — Task 13 实现
+                </p>
+              </div>
+              <Pagination
+                page={filter.page}
+                limit={filter.limit}
+                total={total}
+                onPageChange={(p) => updateFilter({ page: p })}
+              />
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
