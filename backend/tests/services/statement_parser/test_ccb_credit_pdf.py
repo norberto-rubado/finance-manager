@@ -315,6 +315,8 @@ class TestIsRepayment:
 
 # === B-poly-2 regression:_is_repayment 必须按子串顺序匹配 ===
 
+from app.services.statement_parser.ccb_credit_pdf import _is_repayment  # noqa: E402,F811
+
 
 def test_is_repayment_exact_match():
     """正常的银联入账描述应识别。"""

@@ -43,7 +43,7 @@ _DATE8_RE = re.compile(r"\b(\d{8})\b")
 
 # ── 银联入账关键词(U+94f6 U+8054 U+5165 U+8d26 = 银联入账) ──────────────────
 # 必须用子串匹配,不能用 codepoint set(否则乱序字符串如"联银账入"会误判)
-_REPAYMENT_KEYWORD = "银联入账"  # 银联入账
+_REPAYMENT_KEYWORD = "银联入账"
 
 # ── 银联入账 codepoints (银联入账 = U+94f6 U+8054 U+5165 U+8d26) ─────────
 _YINLIAN_CP = (0x94f6, 0x8054)          # 银联 (前两字即可定位)
