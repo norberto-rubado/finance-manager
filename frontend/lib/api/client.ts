@@ -1,6 +1,6 @@
 import { ApiClientError, type ApiError } from './types';
 
-type Json = Record<string, unknown> | unknown[] | string | number | boolean | null;
+type Json = object | unknown[] | string | number | boolean | null;
 
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
