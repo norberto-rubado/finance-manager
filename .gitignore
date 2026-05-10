@@ -50,3 +50,7 @@ logs/
 
 # Build artifacts
 *.tar.gz
+
+# Claude Code local workspace (worktrees, agent state)
+.claude/
+.claire/
