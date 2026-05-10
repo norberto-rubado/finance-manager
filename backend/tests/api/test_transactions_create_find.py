@@ -223,3 +223,94 @@ def test_find_merchants_excludes_mirrors(
         m for m in resp.json()["items"] if "五道口" in m["normalized"]
     )
     assert wudaokou["count"] == 2
+
+
+# === Section: GET /api/transactions/pending-classifications (Task 3) ===
+
+def test_pending_classifications_returns_only_uncategorized(
+    logged_in_client, alipay_account, cafe_category, db, admin_user,
+):
+    """category_id IS NULL → 进列表;已分类的不出现。"""
+    # 1 笔已分类 + 2 笔未分类
+    classified = Transaction(
+        user_id=admin_user.id, account_id=alipay_account.id,
+        tx_kind="expense", tx_time=datetime(2026, 5, 1, 12, tzinfo=timezone.utc),
+        amount=Decimal("10.00"), currency="CNY", amount_settled_cny=Decimal("10.00"),
+        merchant_raw="瑞幸", merchant_normalized="瑞幸",
+        category_id=cafe_category.id, classification_confidence=1.0,
+        source="manual", is_mirror=False,
+    )
+    pending1 = Transaction(
+        user_id=admin_user.id, account_id=alipay_account.id,
+        tx_kind="expense", tx_time=datetime(2026, 5, 2, 12, tzinfo=timezone.utc),
+        amount=Decimal("20.00"), currency="CNY", amount_settled_cny=Decimal("20.00"),
+        merchant_raw="某小店", merchant_normalized="某小店",
+        category_id=None, source="manual", is_mirror=False,
+    )
+    pending2 = Transaction(
+        user_id=admin_user.id, account_id=alipay_account.id,
+        tx_kind="expense", tx_time=datetime(2026, 5, 3, 12, tzinfo=timezone.utc),
+        amount=Decimal("30.00"), currency="CNY", amount_settled_cny=Decimal("30.00"),
+        merchant_raw="另家店", merchant_normalized="另家店",
+        category_id=None, source="manual", is_mirror=False,
+    )
+    db.add_all([classified, pending1, pending2]); db.flush()
+
+    resp = logged_in_client.get("/api/transactions/pending-classifications")
+    assert resp.status_code == 200
+    data = resp.json()
+    ids = [tx["id"] for tx in data["items"]]
+    assert pending1.id in ids
+    assert pending2.id in ids
+    assert classified.id not in ids
+
+
+def test_pending_classifications_excludes_mirrors(
+    logged_in_client, alipay_account, db, admin_user,
+):
+    """is_mirror=True 的未分类 tx 也不应出现(已被去重的镜像不需要分类)。"""
+    primary = Transaction(
+        user_id=admin_user.id, account_id=alipay_account.id,
+        tx_kind="expense", tx_time=datetime(2026, 5, 4, 12, tzinfo=timezone.utc),
+        amount=Decimal("50.00"), currency="CNY", amount_settled_cny=Decimal("50.00"),
+        merchant_raw="A", merchant_normalized="A",
+        category_id=None, source="alipay", is_mirror=False,
+    )
+    db.add(primary); db.flush()
+    mirror = Transaction(
+        user_id=admin_user.id, account_id=alipay_account.id,
+        tx_kind="expense", tx_time=datetime(2026, 5, 4, 12, tzinfo=timezone.utc),
+        amount=Decimal("50.00"), currency="CNY", amount_settled_cny=Decimal("50.00"),
+        merchant_raw="A", merchant_normalized="A",
+        category_id=None, source="bank", is_mirror=True, mirror_of_id=primary.id,
+    )
+    db.add(mirror); db.flush()
+
+    resp = logged_in_client.get("/api/transactions/pending-classifications")
+    ids = [tx["id"] for tx in resp.json()["items"]]
+    assert primary.id in ids
+    assert mirror.id not in ids
+
+
+def test_pending_classifications_pagination(
+    logged_in_client, alipay_account, db, admin_user,
+):
+    """seed 5 条 → limit=2 + offset=2 应返回中间 2 条(按 tx_time DESC)。"""
+    for i in range(5):
+        db.add(Transaction(
+            user_id=admin_user.id, account_id=alipay_account.id,
+            tx_kind="expense", tx_time=datetime(2026, 5, 10+i, 12, tzinfo=timezone.utc),
+            amount=Decimal("10.00"), currency="CNY", amount_settled_cny=Decimal("10.00"),
+            merchant_raw=f"店{i}", merchant_normalized=f"店{i}",
+            category_id=None, source="manual", is_mirror=False,
+        ))
+    db.flush()
+    resp = logged_in_client.get("/api/transactions/pending-classifications", params={
+        "limit": 2, "offset": 2,
+    })
+    data = resp.json()
+    assert data["total"] == 5
+    assert len(data["items"]) == 2
+    # 倒序 → 14日 / 13日 / [12日, 11日] / 10日
+    assert data["items"][0]["merchant_raw"] == "店2"
+    assert data["items"][1]["merchant_raw"] == "店1"

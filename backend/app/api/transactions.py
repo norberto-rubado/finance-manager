@@ -193,6 +193,34 @@ def find_merchants(
     return MerchantSearchOut(items=items, total=len(items))
 
 
+@router.get("/pending-classifications", response_model=TransactionListOut)
+def list_pending_classifications(
+    user: CurrentUserDep, db: DbDep,
+    limit: int = Query(20, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> TransactionListOut:
+    """spec § 8.1 list_pending_classifications 工具的 backend 实现。
+
+    返回 category_id IS NULL 且 is_mirror=False 的交易,按 tx_time DESC 翻页。
+    suggested_categories 字段 V2 加(rapidfuzz vs categories.name)。
+    """
+    where = (
+        (Transaction.user_id == user.id)
+        & (Transaction.category_id.is_(None))
+        & (Transaction.is_mirror.is_(False))
+    )
+    total = db.execute(select(func.count()).select_from(Transaction).where(where)).scalar_one()
+    items = db.execute(
+        select(Transaction).where(where)
+        .order_by(Transaction.tx_time.desc(), Transaction.id.desc())
+        .limit(limit).offset(offset)
+    ).scalars().all()
+    return TransactionListOut(
+        items=[TransactionOut.model_validate(t) for t in items],
+        total=total, limit=limit, offset=offset,
+    )
+
+
 def _get_tx_or_404(db, user_id: int, tx_id: int) -> Transaction:
     tx = db.execute(
         select(Transaction).where(
