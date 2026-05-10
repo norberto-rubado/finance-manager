@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import select
 
 from app.models import Account, Transaction, User
 from app.services.summary import compute_account_balances
