@@ -8,6 +8,7 @@ from app.api.deps import CurrentUserDep, DbDep
 from app.models import Account, Category, MerchantRule, Transaction
 from app.schemas import (
     BulkUpdateByMerchantIn, BulkUpdateResult,
+    MerchantSearchOut, MerchantStatItem,
     TransactionCreateIn, TransactionListOut, TransactionOut,
     TransactionPatchIn, TransactionQuery,
 )
@@ -122,6 +123,74 @@ def create_manual_transaction(
         db.flush()
 
     return TransactionOut.model_validate(tx)
+
+
+@router.get("/merchants", response_model=MerchantSearchOut)
+def find_merchants(
+    user: CurrentUserDep, db: DbDep,
+    keyword: str = Query(..., min_length=1, max_length=128),
+    limit: int = Query(50, ge=1, le=200),
+) -> MerchantSearchOut:
+    """spec § 8.1 find_merchant 工具的 backend 实现。
+
+    聚合 group by merchant_normalized,排除 is_mirror=True;
+    sample_categories:对每组取 top 3 出现频次最高的 category name(无分类记 NULL → 跳过)。
+    """
+    # Step 1:聚合 count + sum
+    rows = db.execute(
+        select(
+            Transaction.merchant_normalized,
+            func.count(Transaction.id).label("cnt"),
+            func.sum(Transaction.amount_settled_cny).label("amt"),
+        )
+        .where(
+            Transaction.user_id == user.id,
+            Transaction.is_mirror.is_(False),
+            Transaction.merchant_normalized.ilike(f"%{keyword}%"),
+        )
+        .group_by(Transaction.merchant_normalized)
+        .order_by(func.sum(Transaction.amount_settled_cny).desc())
+        .limit(limit)
+    ).all()
+
+    if not rows:
+        return MerchantSearchOut(items=[], total=0)
+
+    # Step 2:对每个 normalized,查它的 top 3 categories
+    normalized_names = [r[0] for r in rows if r[0] is not None]
+    cat_rows = db.execute(
+        select(
+            Transaction.merchant_normalized,
+            Category.name,
+            func.count(Transaction.id).label("hit_cnt"),
+        )
+        .join(Category, Category.id == Transaction.category_id)
+        .where(
+            Transaction.user_id == user.id,
+            Transaction.is_mirror.is_(False),
+            Transaction.merchant_normalized.in_(normalized_names),
+        )
+        .group_by(Transaction.merchant_normalized, Category.name)
+        .order_by(Transaction.merchant_normalized, func.count(Transaction.id).desc())
+    ).all()
+
+    # 把 top 3 折叠到 dict[normalized, list[name]]
+    samples: dict[str, list[str]] = {}
+    for norm, name, _cnt in cat_rows:
+        bucket = samples.setdefault(norm, [])
+        if len(bucket) < 3:
+            bucket.append(name)
+
+    items = [
+        MerchantStatItem(
+            normalized=(norm or ""),
+            count=cnt,
+            total_amount=amt,
+            sample_categories=samples.get(norm, []),
+        )
+        for norm, cnt, amt in rows
+    ]
+    return MerchantSearchOut(items=items, total=len(items))
 
 
 def _get_tx_or_404(db, user_id: int, tx_id: int) -> Transaction:

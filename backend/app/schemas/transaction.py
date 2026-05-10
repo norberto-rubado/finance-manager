@@ -80,3 +80,16 @@ class TransactionCreateIn(BaseModel):
     account_id: int
     category_id: int | None = None
     tx_kind: TxKind = "expense"
+
+
+class MerchantStatItem(BaseModel):
+    """spec § 8.1 find_merchant 单条聚合结果。"""
+    normalized: str
+    count: int
+    total_amount: Decimal
+    sample_categories: list[str]    # 该商家命中过的 category 名字 top 3,无分类则空
+
+
+class MerchantSearchOut(BaseModel):
+    items: list[MerchantStatItem]
+    total: int                       # 不去 count(*) 单查,直接 len(items);limit 默认 50

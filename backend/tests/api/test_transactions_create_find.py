@@ -4,9 +4,12 @@ slice E Task 1/2/3 端点共用此文件 — 三组测试用 # === Section ===  
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
+from decimal import Decimal
+
 import pytest
 
-from app.models import Account, Category, MerchantRule
+from app.models import Account, Category, MerchantRule, Transaction
 
 # === Section: POST /api/transactions/manual (Task 1) ===
 
@@ -137,3 +140,86 @@ def test_create_manual_transaction_negative_amount_422(logged_in_client, alipay_
     }
     resp = logged_in_client.post("/api/transactions/manual", json=body)
     assert resp.status_code == 422  # Pydantic 拒绝负数(Field gt=0)
+
+
+# === Section: GET /api/transactions/merchants (Task 2) ===
+
+@pytest.fixture
+def luckin_transactions(db, admin_user, alipay_account, cafe_category) -> list[Transaction]:
+    """seed 5 笔瑞幸 + 2 笔星巴克,均 expense 已分类。"""
+    rows: list[Transaction] = []
+    for i, (merchant_norm, amt) in enumerate([
+        ("瑞幸咖啡 五道口", "23.50"),
+        ("瑞幸咖啡 西二旗", "18.00"),
+        ("瑞幸咖啡 五道口", "25.00"),
+        ("瑞幸咖啡 望京", "21.00"),
+        ("瑞幸咖啡 五道口", "27.00"),
+        ("星巴克 国贸店", "38.00"),
+        ("星巴克 望京店", "42.00"),
+    ]):
+        tx = Transaction(
+            user_id=admin_user.id, account_id=alipay_account.id,
+            tx_kind="expense", tx_time=datetime(2026, 5, 1+i, 9, 0, tzinfo=timezone.utc),
+            amount=Decimal(amt), currency="CNY", amount_settled_cny=Decimal(amt),
+            merchant_raw=merchant_norm, merchant_normalized=merchant_norm,
+            category_id=cafe_category.id, classification_confidence=1.0,
+            source="manual", is_mirror=False,
+        )
+        db.add(tx); rows.append(tx)
+    db.flush()
+    return rows
+
+
+def test_find_merchants_keyword_match(logged_in_client, luckin_transactions):
+    resp = logged_in_client.get("/api/transactions/merchants", params={"keyword": "瑞幸"})
+    assert resp.status_code == 200
+    data = resp.json()
+    # 至少 3 个不同的瑞幸 normalized 名字(五道口/西二旗/望京)
+    luckin_items = [m for m in data["items"] if "瑞幸" in m["normalized"]]
+    assert len(luckin_items) >= 3
+    # 每条有 count + total_amount + sample_categories
+    for item in luckin_items:
+        assert item["count"] >= 1
+        assert Decimal(item["total_amount"]) > 0
+        assert isinstance(item["sample_categories"], list)
+    # 五道口出现 3 次合计 75.50
+    wudaokou = next(m for m in luckin_items if "五道口" in m["normalized"])
+    assert wudaokou["count"] == 3
+    assert Decimal(wudaokou["total_amount"]) == Decimal("75.50")
+
+
+def test_find_merchants_keyword_case_insensitive(logged_in_client, luckin_transactions):
+    """ILIKE 大小写不敏感(中文不影响,但确保英文走 ILIKE)。"""
+    # 加一条英文商户
+    # (此 test 仅校验 ILIKE 走 ICU,中文 LIKE 在 PG 里默认大小写无关,英文需 ILIKE)
+    resp = logged_in_client.get("/api/transactions/merchants", params={"keyword": "星巴克"})
+    assert resp.status_code == 200
+    starbucks = [m for m in resp.json()["items"] if "星巴克" in m["normalized"]]
+    assert len(starbucks) == 2  # 国贸店 + 望京店
+
+
+def test_find_merchants_empty_keyword_422(logged_in_client):
+    resp = logged_in_client.get("/api/transactions/merchants", params={"keyword": ""})
+    assert resp.status_code == 422
+
+
+def test_find_merchants_no_match_returns_empty(logged_in_client, luckin_transactions):
+    resp = logged_in_client.get("/api/transactions/merchants", params={"keyword": "tim hortons"})
+    assert resp.status_code == 200
+    assert resp.json()["items"] == []
+
+
+def test_find_merchants_excludes_mirrors(
+    logged_in_client, luckin_transactions, db,
+):
+    """is_mirror=True 的 transaction 不参与聚合(避免重复算)。"""
+    # 把第一条标 mirror
+    luckin_transactions[0].is_mirror = True
+    luckin_transactions[0].mirror_of_id = luckin_transactions[1].id
+    db.flush()
+    resp = logged_in_client.get("/api/transactions/merchants", params={"keyword": "五道口"})
+    # 五道口仍能聚合(剩 2 条),count=2 而非 3
+    wudaokou = next(
+        m for m in resp.json()["items"] if "五道口" in m["normalized"]
+    )
+    assert wudaokou["count"] == 2
