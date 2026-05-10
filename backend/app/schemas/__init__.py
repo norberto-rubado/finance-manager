@@ -6,6 +6,13 @@
 - XxxQuery:query string(FastAPI Query 用)
 """
 from app.schemas.account import AccountBalanceOut, AccountCreate, AccountOut, AccountUpdate
+from app.schemas.api_token import (
+    ApiTokenCreate,
+    ApiTokenCreateResp,
+    ApiTokenListOut,
+    ApiTokenOut,
+    ApiTokenVerifyOut,
+)
 from app.schemas.auth import LoginIn, LoginOut, MeOut
 from app.schemas.category import CategoryCreate, CategoryOut, CategoryUpdate
 from app.schemas.dedup import DedupDecisionIn, DedupPairOut, PendingPairListOut
@@ -40,4 +47,6 @@ __all__ = [
     "MerchantSearchOut", "MerchantStatItem",
     "DedupPairOut", "PendingPairListOut", "DedupDecisionIn",
     "SummaryOut", "SummaryBreakdownItem",
+    "ApiTokenCreate", "ApiTokenCreateResp", "ApiTokenListOut",
+    "ApiTokenOut", "ApiTokenVerifyOut",
 ]
