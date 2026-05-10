@@ -37,12 +37,15 @@ async def test_get_injects_auth_header_and_returns_json():
     assert seen_headers["authorization"] == "Bearer t-test"
 
 
-async def test_post_returns_empty_dict_on_204():
+@pytest.mark.parametrize("method", ["GET", "POST", "PATCH", "DELETE"])
+async def test_204_returns_empty_dict(method):
+    """4 个 verb 都走同一个 _request helper,所以 204→{} 行为应当一致。"""
     def handler(req: httpx.Request) -> httpx.Response:
         return httpx.Response(204)
 
     client = _client_with_handler(handler)
-    data = await client.post("/api/x", json={"y": 1})
+    method_fn = getattr(client, method.lower())
+    data = await method_fn("/api/x")
     assert data == {}
 
 

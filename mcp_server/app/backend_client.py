@@ -27,44 +27,29 @@ class BackendClient:
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    async def get(self, url: str, **kwargs) -> dict:
-        resp = await self._client.get(url, **kwargs)
+    async def _request(self, method: str, url: str, **kwargs) -> dict:
+        """单一 HTTP 入口:统一 raise_for_status → MCPToolError 映射 + 204 → {}。"""
+        resp = await self._client.request(method, url, **kwargs)
         try:
             resp.raise_for_status()
         except httpx.HTTPStatusError as e:
             raise httpx_to_mcp_error(e) from e
+        # 204 No Content — 没有 body,返 {} 让 caller 不必做 None 判定
+        if resp.status_code == 204:
+            return {}
         return resp.json()
+
+    async def get(self, url: str, **kwargs) -> dict:
+        return await self._request("GET", url, **kwargs)
 
     async def post(self, url: str, **kwargs) -> dict:
-        resp = await self._client.post(url, **kwargs)
-        try:
-            resp.raise_for_status()
-        except httpx.HTTPStatusError as e:
-            raise httpx_to_mcp_error(e) from e
-        # 204 No Content
-        if resp.status_code == 204:
-            return {}
-        return resp.json()
+        return await self._request("POST", url, **kwargs)
 
     async def patch(self, url: str, **kwargs) -> dict:
-        resp = await self._client.patch(url, **kwargs)
-        try:
-            resp.raise_for_status()
-        except httpx.HTTPStatusError as e:
-            raise httpx_to_mcp_error(e) from e
-        if resp.status_code == 204:
-            return {}
-        return resp.json()
+        return await self._request("PATCH", url, **kwargs)
 
     async def delete(self, url: str, **kwargs) -> dict:
-        resp = await self._client.delete(url, **kwargs)
-        try:
-            resp.raise_for_status()
-        except httpx.HTTPStatusError as e:
-            raise httpx_to_mcp_error(e) from e
-        if resp.status_code == 204:
-            return {}
-        return resp.json()
+        return await self._request("DELETE", url, **kwargs)
 
 
 _client: BackendClient | None = None

@@ -4,8 +4,10 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# 仓库根 .env(mcp_server 目录在 finance-manager/mcp_server,所以 parent.parent.parent)
-_ENV_PATH = Path(__file__).parent.parent.parent / ".env"
+# 仓库根 .env(mcp_server 目录在 finance-manager/mcp_server,所以 3 层 parent)
+# 路径展开:app/config.py → app/ → mcp_server/ → finance-manager/
+# .resolve() 兜底 symlink / git worktree 等场景,保证算到真实仓库根。
+_ENV_PATH = (Path(__file__).resolve().parent.parent.parent / ".env")
 
 
 class Settings(BaseSettings):

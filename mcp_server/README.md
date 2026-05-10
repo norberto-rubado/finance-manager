@@ -21,7 +21,7 @@ python -m app.main --transport stdio
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
-| `MCP_BACKEND_URL` | `http://backend:8000` | backend HTTP 内网地址(本机 dev 用 `http://127.0.0.1:8000`) |
+| `MCP_BACKEND_URL` | `http://127.0.0.1:8000` | backend HTTP 内网地址(本机 dev 默认;docker-compose 里 override 为 `http://backend:8000`) |
 | `MCP_API_TOKEN` | — | 必填,backend 创建的 token plain;启动时 server 自检调 backend /verify |
 | `MCP_HOST` | `0.0.0.0` | HTTP transport 监听地址 |
 | `MCP_PORT` | `8765` | HTTP transport 端口 |

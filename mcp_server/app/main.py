@@ -53,13 +53,25 @@ async def _call_tool(name: str, arguments: dict) -> list[mcp_types.TextContent]:
 async def _verify_token_self_check() -> None:
     """启动时调 backend /verify 一次,token 不合法立刻退出(避免起来后第一次工具调用才 fail)。"""
     settings = get_settings()
+    # 这里有意自建 httpx.AsyncClient 而不复用 get_backend_client():chicken-and-egg ——
+    # BackendClient 构造时已经把(可能错的)token 注入 default headers,如果这里直接复用,
+    # 一旦后续 get_backend_client() 缓存了坏 client,问题排查会比这条 self-check 慢得多。
     async with httpx.AsyncClient(
         base_url=settings.mcp_backend_url, timeout=10,
     ) as c:
-        resp = await c.post(
-            "/api/admin/tokens/verify",
-            headers={"Authorization": f"Bearer {settings.mcp_api_token}"},
-        )
+        try:
+            resp = await c.post(
+                "/api/admin/tokens/verify",
+                headers={"Authorization": f"Bearer {settings.mcp_api_token}"},
+            )
+        except httpx.RequestError as e:
+            # 包含 ConnectError / TimeoutException / NetworkError 等 — backend 不可达
+            logger.error(
+                "backend not reachable at %s: %s. Will exit; check MCP_BACKEND_URL or backend health.",
+                settings.mcp_backend_url,
+                e,
+            )
+            sys.exit(3)
         if resp.status_code == 401:
             logger.error("MCP_API_TOKEN invalid (backend rejected). Exiting.")
             sys.exit(2)
@@ -102,9 +114,15 @@ def _register_all_tools() -> None:
     ]:
         try:
             importlib.import_module(tool_module)
-        except ImportError:
-            # Task 6 阶段 tool 模块尚未存在,允许 silent skip
-            logger.debug("tool module %s not found yet (slice E in progress?)", tool_module)
+        except ImportError as e:
+            # 区分两种 ImportError:
+            #   1) tool 模块本身不存在(Task 7-16 还没实现) → e.name == tool_module → 静默跳过
+            #   2) tool 模块存在但它 import 的东西错了(typo / 重命名) → 必须抛,否则 list_tools
+            #      静默少一个工具,debug 起来会非常痛苦
+            if e.name == tool_module:
+                logger.debug("tool module %s not found yet (slice E in progress?)", tool_module)
+            else:
+                raise
 
 
 async def main_stdio() -> None:
