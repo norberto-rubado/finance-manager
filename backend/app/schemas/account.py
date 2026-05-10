@@ -1,4 +1,6 @@
 """Account schemas — spec § 4.1。"""
+from datetime import datetime
+from decimal import Decimal
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -30,3 +32,13 @@ class AccountOut(BaseModel):
     last4: str | None
     currency: str
     archived: bool
+
+
+class AccountBalanceOut(AccountOut):
+    """spec § 8.1 get_account_balances 工具的 backend 等价。继承 AccountOut + 余额字段。
+
+    latest_balance 为流水推算(income - expense - refund),非银行真实余额。
+    latest_balance_at = MAX(tx_time) of non-mirror tx,无交易时为 None。
+    """
+    latest_balance: Decimal
+    latest_balance_at: datetime | None

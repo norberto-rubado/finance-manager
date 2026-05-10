@@ -4,12 +4,13 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentUserDep, DbDep
 from app.models import Account
-from app.schemas import AccountCreate, AccountOut, AccountUpdate
+from app.schemas import AccountBalanceOut, AccountCreate, AccountOut, AccountUpdate
+from app.services.summary import compute_account_balances
 from pydantic import BaseModel
 
 
 class AccountListOut(BaseModel):
-    items: list[AccountOut]
+    items: list[AccountBalanceOut]
     total: int
 
 
@@ -18,13 +19,20 @@ router = APIRouter(prefix="/accounts", tags=["accounts"])
 
 @router.get("", response_model=AccountListOut)
 def list_accounts(user: CurrentUserDep, db: DbDep) -> AccountListOut:
-    items = db.execute(
+    accounts = db.execute(
         select(Account).where(Account.user_id == user.id)
         .order_by(Account.id.asc())
     ).scalars().all()
-    return AccountListOut(
-        items=[AccountOut.model_validate(a) for a in items], total=len(items),
-    )
+    balances = {b["account_id"]: b for b in compute_account_balances(db, user_id=user.id)}
+    items = [
+        AccountBalanceOut(
+            **AccountOut.model_validate(a).model_dump(),
+            latest_balance=balances[a.id]["latest_balance"],
+            latest_balance_at=balances[a.id]["latest_balance_at"],
+        )
+        for a in accounts
+    ]
+    return AccountListOut(items=items, total=len(items))
 
 
 @router.post("", response_model=AccountOut, status_code=201)

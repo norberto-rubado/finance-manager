@@ -5,7 +5,7 @@
 - XxxOut:response body(from_attributes=True,可从 ORM 对象直接构造)
 - XxxQuery:query string(FastAPI Query 用)
 """
-from app.schemas.account import AccountCreate, AccountOut, AccountUpdate
+from app.schemas.account import AccountBalanceOut, AccountCreate, AccountOut, AccountUpdate
 from app.schemas.auth import LoginIn, LoginOut, MeOut
 from app.schemas.category import CategoryCreate, CategoryOut, CategoryUpdate
 from app.schemas.dedup import DedupDecisionIn, DedupPairOut, PendingPairListOut
@@ -31,7 +31,7 @@ from app.schemas.transaction import (
 
 __all__ = [
     "LoginIn", "LoginOut", "MeOut",
-    "AccountCreate", "AccountOut", "AccountUpdate",
+    "AccountCreate", "AccountOut", "AccountUpdate", "AccountBalanceOut",
     "CategoryCreate", "CategoryOut", "CategoryUpdate",
     "MerchantRuleCreate", "MerchantRuleOut", "MerchantRuleUpdate",
     "StatementImportOut", "StatementImportListOut", "ImportResponse", "ReviewBundle",

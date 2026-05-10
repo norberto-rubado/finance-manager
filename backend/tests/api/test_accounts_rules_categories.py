@@ -101,3 +101,17 @@ def test_rules_list_ordered_by_priority(logged_in_client):
 def test_all_endpoints_require_login(client):
     for path in ["/api/categories", "/api/accounts", "/api/rules"]:
         assert client.get(path).status_code == 401
+
+
+def test_list_accounts_includes_balance(logged_in_client, db, admin_user):
+    """新增字段 latest_balance / latest_balance_at 必出现。"""
+    from app.models import Account
+    acc = Account(user_id=admin_user.id, name="x", type="alipay", currency="CNY")
+    db.add(acc); db.flush()
+    resp = logged_in_client.get("/api/accounts")
+    assert resp.status_code == 200
+    items = resp.json()["items"]
+    target = next(it for it in items if it["id"] == acc.id)
+    assert "latest_balance" in target
+    assert target["latest_balance"] == "0.00"
+    assert target["latest_balance_at"] is None
