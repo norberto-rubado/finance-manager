@@ -165,7 +165,8 @@ async def main_http(host: str, port: int) -> None:
         access_log=False,
     )
     s = uvicorn.Server(config)
-    await s.serve()
+    async with manager.run():
+        await s.serve()
 
 
 def main() -> None:
