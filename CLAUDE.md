@@ -16,7 +16,11 @@
 - ✅ **B. 4 个账单解析器**(2026-05-09 完成,DoD verify ALL PASS;含 slice A 遗留 I-1/I-3 修复)
 - ✅ **C. 导入流水线 + 去重 + 分类 + REST API**(2026-05-09 完成,DoD verify ALL PASS;含 4 项遗留 fix:B-poly-1/2、I-5、Rec #5)
 - ✅ **D. Web UI**(2026-05-10 完成,DoD verify ALL PASS;Next.js 14 App Router + shadcn/ui;22 Vitest unit + 4 Playwright smoke;Lighthouse 桌面/手机均 > 80)
-- ⏳ **E. MCP server(10 工具)+ 部署**(下一步;Caddy + Cloudflare DNS-01,端口 8443/9443)
+- ✅ **E. MCP server(10 工具)+ 部署**(2026-05-10 完成,DoD verify ALL PASS;mcp_server/ 独立项目用 mcp SDK ≥ 1.1;backend 4 gap endpoints + API token infra;docker-compose dev/prod profiles + Caddy(slothcroissant 镜像 + Cloudflare DNS-01,端口 8443/9443);scripts/backup.sh + setup-vps.md;含 bcrypt 5.x regression 闭环)
+
+**MVP 全部完成 🎉**(5 切片,2026-05-08 → 2026-05-10)
+
+下一步建议:在 VPS 上跑通完整部署(参考 scripts/setup-vps.md),或开始 V2 路线图(spec § 13)。
 
 ## 标准工作流(每个新切片)
 1. 起 `slice-X-NAME` 分支(从 main):`git checkout -b slice-b-parsers`
@@ -35,11 +39,19 @@
 - **Postgres**:容器内 5432,本机 venv 连 `localhost:5432`,容器间互连用 host `db`
 - **commit 规约**:`feat / fix / refactor / docs / test / chore` 前缀;中英文混排但代码术语必英文;每步立即 commit 不批量
 
-## 遗留问题(slice D/E 处理)
+## 遗留问题(V2 候选)
 
-slice C 已闭环 4 项(B-poly-1/2、I-5、Rec #5),后续切片如有新 polish 在 overview.md 已知遗留问题段累积。
+slice C 已闭环 4 项(B-poly-1/2、I-5、Rec #5);slice E 已闭环 bcrypt 5.x regression。后续 V2 路线图候选见 overview.md "已知遗留问题 → slice E 完成时识别的 V2 候选":
 
-其余 overview.md 中登记的低优先级条目(I-4、M-1 至 M-6、B-poly-3/4)留给后续切片处理。
+- **`list_pending_classifications.suggested_categories`** — 第一版返空,V2 接 rapidfuzz 给建议
+- **`add_transaction.applied_rule`** — backend `POST /manual` 不返 rule_id,V2 加 rule hit info
+- **多 token / 多 scope** — 单用户 read+write 单 scope;V2 加 read-only token 等细粒度 scope
+- **`list_categories` / `list_accounts`(MCP)** — 本切片不暴露,V2 按需加
+- **MCP server admin/tokens/verify race** — `LIMIT-1 by last_used_at` heuristic,V2 改 `verify_token` 返 `(User, ApiToken)`
+- **Caddyfile HSTS preload** — V2 加 `preload` directive
+- **dedup test pollution** — `test_dedup_strong.py` 全套连跑偶 FAIL(单测 PASS),V2 加严格 isolation
+
+其余 overview.md 中登记的低优先级条目(I-4、M-1 至 M-6、B-poly-3/4)留给 V2 处理。
 
 ## 真实账单样本(slice B 解析器测试用,GBK/PDF/xlsx 都已被验证可读)
 - 支付宝 CSV:`C:\Users\WINDOWS\Desktop\财务记录\alipay_record_20260326_2219\alipay_record_20260326_2219_1.csv`(**GBK** 编码,跳前 4 行元信息,16 列)

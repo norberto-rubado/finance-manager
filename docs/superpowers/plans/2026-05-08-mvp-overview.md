@@ -184,6 +184,16 @@ SELECT name FROM categories WHERE parent_id IS NULL ORDER BY sort_order;  -- 顶
 - **M-5** `TimestampMixin.updated_at` 的 `onupdate=func.now()` 仅 ORM 层生效,裸 SQL 不更新。base.py docstring 说明限制。
 - **M-6** `.env.example` 中 `DATABASE_URL=...@db:5432` 是 docker 内网 host,本机 venv 应用 `localhost`。加注释说明两种用法。
 
+### slice E 完成时识别的 V2 候选
+
+- **`list_pending_classifications.suggested_categories`**:第一版返空 list,V2 接 rapidfuzz vs `categories.name` 给建议。
+- **`add_transaction.applied_rule`**:backend `POST /manual` 不返 `rule_id`,MCP 出参的 `applied_rule` 永远是 null;V2 backend 加 rule hit info。
+- **多 token / 多 scope**:本切片 read+write 单 scope;V2 加细粒度 scope(如 read-only token 给只读 agent)。
+- **`list_categories` / `list_accounts`(MCP)**:本切片不暴露 `list_categories` 工具(agent 通过 `list_pending_classifications` + Web UI 操作分类);V2 加按需暴露。
+- **MCP server admin/tokens/verify race**:`LIMIT-1 by last_used_at` heuristic — 单用户 MVP 安全,多 token + 高并发场景需重构(`verify_token` 返回 `(User, ApiToken)`)。
+- **Caddyfile HSTS preload header**:V2 加 `preload` directive 配合 HSTS preload list submission。
+- **dedup test pollution**(slice E 实施期间观察):`tests/services/test_dedup_strong.py::test_cross_source_high_ratio_in_1h_pairs_confirmed` 在某些跑法下与 sibling tests 共用 db state 时偶发 `assert 2 == 1`(单测隔离 PASS,全套连跑偶 FAIL)。`verify_slice_e.ps1` 跑了两次,第二次 PASS;V2 把 dedup 套件改为更严格的 isolation 或 truncate-between-tests。
+
 ---
 
 ## 完成进度
@@ -194,6 +204,6 @@ SELECT name FROM categories WHERE parent_id IS NULL ORDER BY sort_order;  -- 顶
 | B. 4 个解析器 | ✅ 完成 | 2026-05-09 | (实施工时由 controller 估算) | DoD verify script passed; 4 parsers cov ≥ 80%; 137 tests pass; I-1/I-3 also resolved; 真实 4 份样本入仓 |
 | C. 流水线 + API | ✅ 完成 | 2026-05-09 | (实施工时由 controller 估算) | DoD verify ALL PASS;含 4 项 slice A/B 遗留 fix(B-poly-1/2、I-5、Rec #5);全测试 271 passed |
 | D. Web UI | ✅ 完成 | 2026-05-10 | (实施工时由 controller 估算) | DoD verify ALL PASS;Next.js 14 App Router + shadcn/ui;22 Vitest unit + 4 Playwright smoke;Lighthouse 桌面/手机 > 80;25 commits |
-| E. MCP + 部署 | 未开始 | — | — | — |
+| E. MCP + 部署 | ✅ 完成 | 2026-05-10 | (实施工时由 controller 估算) | DoD verify ALL PASS;10 MCP 工具 unit + integration + stdio JSON-RPC e2e 全绿(308 backend + 68 mcp_server tests);backend 4 gap endpoints + API token infra + docker-compose dev/prod profiles + Caddy(slothcroissant 镜像 + Cloudflare DNS-01,8443/9443) + scripts/backup.sh + setup-vps.md |
 
 (end of overview)
