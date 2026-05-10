@@ -20,6 +20,7 @@ from app.schemas.summary import SummaryBreakdownItem, SummaryOut
 from app.schemas.transaction import (
     BulkUpdateByMerchantIn,
     BulkUpdateResult,
+    TransactionCreateIn,
     TransactionListOut,
     TransactionOut,
     TransactionPatchIn,
@@ -32,7 +33,7 @@ __all__ = [
     "CategoryCreate", "CategoryOut", "CategoryUpdate",
     "MerchantRuleCreate", "MerchantRuleOut", "MerchantRuleUpdate",
     "StatementImportOut", "StatementImportListOut", "ImportResponse", "ReviewBundle",
-    "TransactionOut", "TransactionListOut", "TransactionPatchIn",
+    "TransactionCreateIn", "TransactionOut", "TransactionListOut", "TransactionPatchIn",
     "TransactionQuery", "BulkUpdateByMerchantIn", "BulkUpdateResult",
     "DedupPairOut", "PendingPairListOut", "DedupDecisionIn",
     "SummaryOut", "SummaryBreakdownItem",

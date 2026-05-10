@@ -5,11 +5,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, func, select
 
 from app.api.deps import CurrentUserDep, DbDep
-from app.models import Category, MerchantRule, Transaction
+from app.models import Account, Category, MerchantRule, Transaction
 from app.schemas import (
     BulkUpdateByMerchantIn, BulkUpdateResult,
-    TransactionListOut, TransactionOut, TransactionPatchIn, TransactionQuery,
+    TransactionCreateIn, TransactionListOut, TransactionOut,
+    TransactionPatchIn, TransactionQuery,
 )
+from app.services.classifier import classify_transaction
+from app.services.statement_parser.normalize import normalize_merchant
 
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
@@ -50,6 +53,75 @@ def list_transactions(
         items=[TransactionOut.model_validate(t) for t in items],
         total=total, limit=q.limit, offset=q.offset,
     )
+
+
+@router.post("/manual", response_model=TransactionOut, status_code=status.HTTP_201_CREATED)
+def create_manual_transaction(
+    body: TransactionCreateIn, user: CurrentUserDep, db: DbDep,
+) -> TransactionOut:
+    """spec § 8.1 add_transaction 工具的 backend 实现。
+
+    流程:
+    1) 校验 account_id 属于当前 user(404)
+    2) 若给了 category_id → 校验属于当前 user(404),并跳过分类引擎
+    3) 否则 → 跑 classify_transaction 单条,命中真规则填 category_id + confidence=1.0
+    4) tx 落库 source='manual',source_unique_key=None,is_mirror=False
+    """
+    # 1) account 校验
+    acc = db.execute(
+        select(Account).where(
+            Account.id == body.account_id, Account.user_id == user.id,
+        )
+    ).scalar_one_or_none()
+    if acc is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "account not found")
+
+    # 2) category 校验(若给了)
+    if body.category_id is not None:
+        cat = db.execute(
+            select(Category).where(
+                Category.id == body.category_id, Category.user_id == user.id,
+            )
+        ).scalar_one_or_none()
+        if cat is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "category not found")
+
+    # 3) 构 Transaction(暂不 commit,先看是否要跑 classifier)
+    merchant_norm = normalize_merchant(body.merchant)
+    tx = Transaction(
+        user_id=user.id,
+        account_id=body.account_id,
+        statement_import_id=None,
+        tx_kind=body.tx_kind,
+        tx_time=body.tx_time,
+        post_time=None,
+        amount=body.amount,
+        currency=body.currency,
+        amount_settled_cny=body.amount,  # manual 默认 CNY,无需折算
+        merchant_raw=body.merchant,
+        merchant_normalized=merchant_norm,
+        counterparty_raw=None,
+        description_raw=body.description,
+        category_id=body.category_id,
+        classification_confidence=1.0 if body.category_id is not None else None,
+        source="manual",
+        external_tx_id=None,
+        external_merchant_id=None,
+        payment_method_raw=None,
+        is_mirror=False,
+        mirror_of_id=None,
+        source_unique_key=None,
+        raw_payload=None,
+    )
+    db.add(tx); db.flush()
+
+    # 4) 若没显式给 category,跑 classifier(单条用 classify_transaction,
+    #    它接收 in-memory tx 直接 mutate;classify_batch 走 id 列表是另一种契约)
+    if body.category_id is None:
+        classify_transaction(db, tx)
+        db.flush()
+
+    return TransactionOut.model_validate(tx)
 
 
 def _get_tx_or_404(db, user_id: int, tx_id: int) -> Transaction:

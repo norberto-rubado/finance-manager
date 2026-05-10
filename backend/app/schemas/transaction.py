@@ -68,3 +68,15 @@ class BulkUpdateByMerchantIn(BaseModel):
 class BulkUpdateResult(BaseModel):
     affected_count: int
     rule_id: int | None  # also_add_rule=True 时返回新建/复用的 rule_id
+
+
+class TransactionCreateIn(BaseModel):
+    """POST /api/transactions/manual — spec § 8.1 add_transaction 工具的 backend 等价。"""
+    tx_time: datetime
+    amount: Decimal = Field(..., gt=0, max_digits=14, decimal_places=2)
+    currency: str = Field("CNY", min_length=3, max_length=8)
+    merchant: str = Field(..., min_length=1, max_length=255)
+    description: str | None = Field(None, max_length=512)
+    account_id: int
+    category_id: int | None = None
+    tx_kind: TxKind = "expense"
