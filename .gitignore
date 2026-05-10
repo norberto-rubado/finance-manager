@@ -54,3 +54,7 @@ logs/
 # Claude Code local workspace (worktrees, agent state)
 .claude/
 .claire/
+
+# Local AI/agent context (not public docs)
+CLAUDE.md
+AGENTS.md
