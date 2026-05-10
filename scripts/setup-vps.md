@@ -64,7 +64,7 @@ nano .env
 | `POSTGRES_PASSWORD` | `openssl rand -hex 16` |
 | `SECRET_KEY` | `openssl rand -hex 32` |
 | `ADMIN_USERNAME` | 自定 |
-| `ADMIN_PASSWORD_HASH` | `docker run --rm python:3.11-slim sh -c "pip install -q passlib bcrypt && python -c \"from passlib.hash import bcrypt; print(bcrypt.hash('YOUR_DEV_PASSWORD'))\""` |
+| `ADMIN_PASSWORD_HASH` | `docker run --rm python:3.11-slim sh -c "pip install -q passlib bcrypt && python -c \"from passlib.hash import bcrypt; print(bcrypt.hash('YOUR_DEV_PASSWORD'))\""`；写入 `.env` 时必须用单引号包住,例如 `ADMIN_PASSWORD_HASH='$2b$12$...'`,避免 docker-compose 把 `$2b/$12` 当变量插值 |
 | `MCP_API_TOKEN` | 部署后在 web /api/admin/tokens 端点生成,**不**在 .env 预填(留空字符串占位) |
 | `DOMAIN` | `money.yourdomain.com`(已绑 Cloudflare) |
 | `CLOUDFLARE_API_TOKEN` | Cloudflare → My Profile → API Tokens → 新建 token,scope: `Zone.DNS:Edit` ONLY |
