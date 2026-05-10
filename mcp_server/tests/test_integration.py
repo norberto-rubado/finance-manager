@@ -43,13 +43,11 @@ def test_each_tool_has_handler_and_schema():
         assert "properties" in defn.inputSchema
 
 
-def test_unknown_tool_raises():
+async def test_unknown_tool_raises():
     """main._call_tool 遇未知 tool 抛 ValueError(MCP SDK 把 ValueError 转协议错误)。"""
-    import asyncio
-
     from app.main import _call_tool
     with pytest.raises(ValueError):
-        asyncio.run(_call_tool("nonexistent_tool", {}))
+        await _call_tool("nonexistent_tool", {})
 
 
 def test_register_all_tools_idempotent():
