@@ -14,13 +14,14 @@ from app.backend_client import get_backend_client
 from app.errors import MCPToolError
 from app.tools import register
 
-
 _TOOL = mcp_types.Tool(
     name="list_transactions",
     description=(
         "List transactions with optional filters. "
         "Use date_from/date_to (ISO 8601) for time range, account_id / category_id "
         "for scope, kind in {expense,income,neutral,refund} for type. "
+        "Optional keyword (substring of merchant_normalized) and source "
+        "(channel: bank/alipay/wechat/conversation/manual) filters available. "
         "Returns paginated list with summary fields per row."
     ),
     inputSchema={
