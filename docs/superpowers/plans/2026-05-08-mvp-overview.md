@@ -170,6 +170,10 @@ SELECT name FROM categories WHERE parent_id IS NULL ORDER BY sort_order;  -- 顶
 - **B-poly-3** `wechat_xlsx.py` 的 `_to_str` 把 "/" 字面值视为占位符,会误处理真实商户名含 "/" 的情况(如 "A/B 公司")。本切片真实样本未触发,留待 slice C 分类引擎遇到时处理。
 - **B-poly-4** `seed.py` 真实 `python -m app.db.seed` 跑后会在 dev db 留持久 admin 行,导致 test 必须用 `ON CONFLICT` 兜底(已在 commit `80e6908` 解决)。根本修复:slice C 启动 finance_test 独立 db 后启用 TEST_DATABASE_URL。
 
+### 切片 D 实施期间引入(已在 slice E Task 0 闭环)
+
+- ~~**bcrypt 5.x regression**:某次 `pip install` 升 bcrypt 到 5.0.0(API break:`__about__` 移除 + ≥72byte 强制抛错),passlib 1.7.x 不兼容,backend pytest 套件 2 failed + 42 errors。`verify_slice_d.ps1` 只跑 frontend,没暴露此问题。~~ ✅ 已在 slice E Task 0 修复(`pyproject.toml` pin `bcrypt>=4.0,<5` + `passlib>=1.7.4`)
+
 ### Polish(后续任意切片处理)
 
 - **I-4** `seed_default_categories` 返回值"总数"(46)而非"新增数",二次跑误导运维。改为返回 `(created, total)` 或仅 `created`。
