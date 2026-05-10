@@ -1,0 +1,51 @@
+{
+	email {env.CADDY_ACME_EMAIL}
+	# 全局选项可加 admin off 关 admin endpoint,本切片不暴露
+}
+
+{$DOMAIN}:8443 {
+	tls {
+		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+	}
+
+	# 安全 header
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Frame-Options "DENY"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+
+	# /api/* 反代 backend
+	handle /api/* {
+		reverse_proxy backend_prod:8000
+	}
+
+	# 兜底反代 frontend(Next.js standalone)
+	handle {
+		reverse_proxy frontend_prod:3000
+	}
+
+	encode gzip
+	log {
+		output stdout
+		format console
+	}
+}
+
+{$DOMAIN}:9443 {
+	tls {
+		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+
+	reverse_proxy mcp_prod:8765
+
+	log {
+		output stdout
+		format console
+	}
+}

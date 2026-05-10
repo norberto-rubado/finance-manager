@@ -7,7 +7,27 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finance}
       POSTGRES_DB: ${POSTGRES_DB:-finance}
     ports:
+      # dev profile: 暴露到 host;prod 不暴露(只走 docker network)
       - "5432:5432"
+    profiles: ["dev"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-finance}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  db_prod:
+    # 与 db 相同 image + volume,但不暴露端口(prod profile 用)
+    image: postgres:16-alpine
+    container_name: finance-manager-db-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-finance}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finance}
+      POSTGRES_DB: ${POSTGRES_DB:-finance}
+    profiles: ["prod"]
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -23,14 +43,32 @@ services:
     depends_on:
       db:
         condition: service_healthy
+        required: false      # prod 用 db_prod,dev 用 db
     ports:
       - "8000:8000"
+    profiles: ["dev"]
     volumes:
       - ./backend:/app
       - uploads:/app/uploads
     command: >
       sh -c "alembic upgrade head &&
              uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  backend_prod:
+    build: ./backend
+    container_name: finance-manager-backend-prod
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      db_prod:
+        condition: service_healthy
+    profiles: ["prod"]
+    volumes:
+      - uploads:/app/uploads
+    # prod 不挂 source code(避免 hot reload),改用 image 自带的 COPY
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
   mcp:
     build: ./mcp_server
@@ -40,8 +78,22 @@ services:
       - backend
     ports:
       - "8765:8765"
+    profiles: ["dev"]
     volumes:
       - ./mcp_server:/app
+    command: ["python", "-m", "app.main", "--transport", "http", "--host", "0.0.0.0", "--port", "8765"]
+
+  mcp_prod:
+    build: ./mcp_server
+    container_name: finance-manager-mcp-prod
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      - backend_prod
+    profiles: ["prod"]
+    command: ["python", "-m", "app.main", "--transport", "http", "--host", "0.0.0.0", "--port", "8765"]
+    environment:
+      MCP_BACKEND_URL: http://backend_prod:8000
 
   frontend:
     build: ./frontend
@@ -51,12 +103,48 @@ services:
       - backend
     ports:
       - "3000:3000"
+    profiles: ["dev"]
     volumes:
       - ./frontend:/app
       - /app/node_modules
       - /app/.next
-    command: npm run dev
+    command: pnpm dev
+
+  frontend_prod:
+    build: ./frontend
+    container_name: finance-manager-frontend-prod
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      - backend_prod
+    profiles: ["prod"]
+    # standalone 模式,Dockerfile runner stage 已配
+    command: ["node", "server.js"]
+
+  caddy:
+    # 社区镜像,内置 caddy-dns/cloudflare 插件(免去 xcaddy build)
+    image: slothcroissant/caddy-cloudflaredns:latest
+    container_name: finance-manager-caddy
+    restart: unless-stopped
+    profiles: ["prod"]
+    ports:
+      - "8443:8443"
+      - "9443:9443"
+    environment:
+      DOMAIN: ${DOMAIN}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
+      CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend_prod
+      - frontend_prod
+      - mcp_prod
 
 volumes:
   pgdata:
   uploads:
+  caddy_data:
+  caddy_config:
