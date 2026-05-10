@@ -4,24 +4,9 @@ from __future__ import annotations
 import json
 from urllib.parse import parse_qs, urlparse
 
-import httpx
 import pytest
 
 from app.tools import get_handler, get_tool_definitions
-
-
-def _setup_tool(mock_backend, response_payload):
-    """共享 setup:注册 tool + 注入 mock backend。返回 captured_request: list[httpx.Request]。"""
-    captured: list[httpx.Request] = []
-
-    def handler(req: httpx.Request) -> httpx.Response:
-        captured.append(req)
-        return httpx.Response(200, json=response_payload)
-
-    mock_backend(handler)
-    # import 触发 register
-    import app.tools.list_transactions  # noqa: F401
-    return captured
 
 
 @pytest.fixture
@@ -62,20 +47,20 @@ def test_list_transactions_tool_definition_present():
     assert "list_transactions" in names
 
 
-async def test_list_transactions_minimal_call(mock_backend, sample_backend_response):
-    captured = _setup_tool(mock_backend, sample_backend_response)
+async def test_list_transactions_minimal_call(setup_tool, sample_backend_response):
+    captured = setup_tool("app.tools.list_transactions", sample_backend_response)
     handler = get_handler("list_transactions")
     assert handler is not None
 
     result = await handler({})
     assert len(result) == 1
     payload = json.loads(result[0].text)
-    # spec § 8.1 出参精简到 5 字段
+    # spec § 8.1 出参精简到 5 字段(严格 ==,确保不会偷偷多带字段)
     assert "transactions" in payload
     items = payload["transactions"]
     assert len(items) == 2
     for item in items:
-        assert set(item.keys()) >= {"id", "time", "amount", "merchant", "category"}
+        assert set(item.keys()) == {"id", "time", "amount", "merchant", "category"}
     assert items[0]["id"] == 1
     assert items[0]["time"] == "2026-05-08T12:30:00"
     assert items[0]["amount"] == "23.50"
@@ -87,9 +72,9 @@ async def test_list_transactions_minimal_call(mock_backend, sample_backend_respo
 
 
 async def test_list_transactions_passes_filters_to_backend(
-    mock_backend, sample_backend_response,
+    setup_tool, sample_backend_response,
 ):
-    captured = _setup_tool(mock_backend, sample_backend_response)
+    captured = setup_tool("app.tools.list_transactions", sample_backend_response)
     handler = get_handler("list_transactions")
 
     await handler({
@@ -114,9 +99,9 @@ async def test_list_transactions_passes_filters_to_backend(
     assert qs["offset"] == ["50"]
 
 
-async def test_list_transactions_omits_none_filters(mock_backend, sample_backend_response):
+async def test_list_transactions_omits_none_filters(setup_tool, sample_backend_response):
     """MCP 入参 None / 缺省 → 不传 backend(让 backend 用其 default)。"""
-    captured = _setup_tool(mock_backend, sample_backend_response)
+    captured = setup_tool("app.tools.list_transactions", sample_backend_response)
     handler = get_handler("list_transactions")
     await handler({"limit": 10})
     qs = parse_qs(urlparse(str(captured[0].url)).query)
@@ -125,12 +110,8 @@ async def test_list_transactions_omits_none_filters(mock_backend, sample_backend
     assert qs["limit"] == ["10"]
 
 
-async def test_list_transactions_handles_404_via_error_envelope(mock_backend):
-    def handler(req: httpx.Request) -> httpx.Response:
-        return httpx.Response(404, json={"detail": "not found"})
-
-    mock_backend(handler)
-    import app.tools.list_transactions  # noqa: F401
+async def test_list_transactions_handles_404_via_error_envelope(setup_tool):
+    setup_tool("app.tools.list_transactions", {"detail": "not found"}, status=404)
     h = get_handler("list_transactions")
 
     result = await h({})
@@ -139,7 +120,7 @@ async def test_list_transactions_handles_404_via_error_envelope(mock_backend):
     assert payload["error"]["code"] == "NOT_FOUND"
 
 
-async def test_list_transactions_input_schema_valid_json_schema():
+def test_list_transactions_input_schema_valid_json_schema():
     """inputSchema 必须是合法 JSON Schema(SDK 会用,但不验证;手动 sanity check)。"""
     import app.tools.list_transactions  # noqa: F401
     defs = get_tool_definitions()

@@ -6,7 +6,6 @@ backend endpoint: GET /api/accounts
 """
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from mcp import types as mcp_types
@@ -14,6 +13,7 @@ from mcp import types as mcp_types
 from app.backend_client import get_backend_client
 from app.errors import MCPToolError
 from app.tools import register
+from app.tools._helpers import error_envelope, text_envelope
 
 _TOOL = mcp_types.Tool(
     name="get_account_balances",
@@ -48,14 +48,11 @@ async def _handler(args: dict[str, Any]) -> list[mcp_types.TextContent]:
     try:
         data = await client.get("/api/accounts")
     except MCPToolError as e:
-        return [mcp_types.TextContent(
-            type="text",
-            text=json.dumps({"error": e.to_dict()}, ensure_ascii=False),
-        )]
+        return error_envelope(e)
     out = {
         "accounts": [_trim_account(a) for a in data.get("items", [])],
     }
-    return [mcp_types.TextContent(type="text", text=json.dumps(out, ensure_ascii=False))]
+    return text_envelope(out)
 
 
 register(_TOOL, _handler)

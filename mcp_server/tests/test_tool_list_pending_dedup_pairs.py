@@ -4,22 +4,9 @@ from __future__ import annotations
 import json
 from urllib.parse import parse_qs, urlparse
 
-import httpx
 import pytest
 
 from app.tools import get_handler, get_tool_definitions
-
-
-def _setup_tool(mock_backend, response_payload):
-    captured: list[httpx.Request] = []
-
-    def handler(req: httpx.Request) -> httpx.Response:
-        captured.append(req)
-        return httpx.Response(200, json=response_payload)
-
-    mock_backend(handler)
-    import app.tools.list_pending_dedup_pairs  # noqa: F401
-    return captured
 
 
 @pytest.fixture
@@ -63,8 +50,8 @@ def test_list_pending_dedup_pairs_tool_definition_present():
     assert "list_pending_dedup_pairs" in names
 
 
-async def test_list_pending_dedup_pairs(mock_backend, sample):
-    captured = _setup_tool(mock_backend, sample)
+async def test_list_pending_dedup_pairs(setup_tool, sample):
+    captured = setup_tool("app.tools.list_pending_dedup_pairs", sample)
     handler = get_handler("list_pending_dedup_pairs")
     assert handler is not None
 
@@ -94,3 +81,24 @@ async def test_list_pending_dedup_pairs(mock_backend, sample):
     assert p0["match_kind"] == "amount_time"
     assert p0["confidence"] == 0.92
     assert p0["reasoning"] == "amount=23.50 within 60s; merchant prefix matched"
+
+
+async def test_list_pending_dedup_pairs_handles_404_via_error_envelope(setup_tool):
+    setup_tool("app.tools.list_pending_dedup_pairs", {"detail": "not found"}, status=404)
+    h = get_handler("list_pending_dedup_pairs")
+
+    result = await h({})
+    payload = json.loads(result[0].text)
+    assert "error" in payload
+    assert payload["error"]["code"] == "NOT_FOUND"
+
+
+def test_list_pending_dedup_pairs_input_schema_valid_json_schema():
+    import app.tools.list_pending_dedup_pairs  # noqa: F401
+    defs = get_tool_definitions()
+    tool = next(t for t in defs if t.name == "list_pending_dedup_pairs")
+    schema = tool.inputSchema
+    assert schema["type"] == "object"
+    assert "properties" in schema
+    for name, prop in schema["properties"].items():
+        assert "type" in prop, f"property {name} missing 'type'"

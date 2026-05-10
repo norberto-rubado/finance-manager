@@ -4,23 +4,9 @@ from __future__ import annotations
 import json
 from urllib.parse import parse_qs, urlparse
 
-import httpx
 import pytest
 
 from app.tools import get_handler, get_tool_definitions
-
-
-def _setup_tool(mock_backend, response_payload):
-    """共享 setup:注册 tool + 注入 mock backend。返回 captured_request: list[httpx.Request]。"""
-    captured: list[httpx.Request] = []
-
-    def handler(req: httpx.Request) -> httpx.Response:
-        captured.append(req)
-        return httpx.Response(200, json=response_payload)
-
-    mock_backend(handler)
-    import app.tools.get_summary  # noqa: F401
-    return captured
 
 
 @pytest.fixture
@@ -46,9 +32,9 @@ def test_get_summary_tool_definition_present():
     assert "get_summary" in names
 
 
-async def test_get_summary_default(mock_backend, sample):
+async def test_get_summary_default(setup_tool, sample):
     """空入参 → 不传 period/group_by(让 backend 用 default);出参 group_key→group。"""
-    captured = _setup_tool(mock_backend, sample)
+    captured = setup_tool("app.tools.get_summary", sample)
     handler = get_handler("get_summary")
     assert handler is not None
 
@@ -62,8 +48,11 @@ async def test_get_summary_default(mock_backend, sample):
     assert payload["group_by"] == "category"
     assert payload["total_expense"] == "1234.56"
     assert payload["total_income"] == "5000.00"
-    # breakdown rename: group_key → group
+    # breakdown rename: group_key → group(严格 4 字段)
     assert len(payload["breakdown"]) == 2
+    expected_breakdown_keys = {"group", "group_id", "amount", "count"}
+    for row in payload["breakdown"]:
+        assert set(row.keys()) == expected_breakdown_keys
     row0 = payload["breakdown"][0]
     assert row0["group"] == "餐饮/咖啡"
     assert "group_key" not in row0
@@ -78,8 +67,8 @@ async def test_get_summary_default(mock_backend, sample):
     assert "date_from" not in qs
 
 
-async def test_get_summary_passes_period_and_group_by(mock_backend, sample):
-    captured = _setup_tool(mock_backend, sample)
+async def test_get_summary_passes_period_and_group_by(setup_tool, sample):
+    captured = setup_tool("app.tools.get_summary", sample)
     handler = get_handler("get_summary")
 
     await handler({
@@ -96,3 +85,24 @@ async def test_get_summary_passes_period_and_group_by(mock_backend, sample):
     assert qs["group_by"] == ["merchant"]
     assert qs["date_from"] == ["2026-05-01T00:00:00"]
     assert qs["date_to"] == ["2026-05-08T00:00:00"]
+
+
+async def test_get_summary_handles_404_via_error_envelope(setup_tool):
+    setup_tool("app.tools.get_summary", {"detail": "not found"}, status=404)
+    h = get_handler("get_summary")
+
+    result = await h({})
+    payload = json.loads(result[0].text)
+    assert "error" in payload
+    assert payload["error"]["code"] == "NOT_FOUND"
+
+
+def test_get_summary_input_schema_valid_json_schema():
+    import app.tools.get_summary  # noqa: F401
+    defs = get_tool_definitions()
+    tool = next(t for t in defs if t.name == "get_summary")
+    schema = tool.inputSchema
+    assert schema["type"] == "object"
+    assert "properties" in schema
+    for name, prop in schema["properties"].items():
+        assert "type" in prop, f"property {name} missing 'type'"

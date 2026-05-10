@@ -4,22 +4,9 @@ from __future__ import annotations
 import json
 from urllib.parse import parse_qs, urlparse
 
-import httpx
 import pytest
 
 from app.tools import get_handler, get_tool_definitions
-
-
-def _setup_tool(mock_backend, response_payload):
-    captured: list[httpx.Request] = []
-
-    def handler(req: httpx.Request) -> httpx.Response:
-        captured.append(req)
-        return httpx.Response(200, json=response_payload)
-
-    mock_backend(handler)
-    import app.tools.list_pending_classifications  # noqa: F401
-    return captured
 
 
 @pytest.fixture
@@ -60,8 +47,8 @@ def test_list_pending_classifications_tool_definition_present():
     assert "list_pending_classifications" in names
 
 
-async def test_list_pending_classifications(mock_backend, sample):
-    captured = _setup_tool(mock_backend, sample)
+async def test_list_pending_classifications(setup_tool, sample):
+    captured = setup_tool("app.tools.list_pending_classifications", sample)
     handler = get_handler("list_pending_classifications")
     assert handler is not None
 
@@ -95,3 +82,26 @@ async def test_list_pending_classifications(mock_backend, sample):
     # 第 2 条 merchant_normalized=None,fallback 到 merchant_raw
     tx1 = txs[1]
     assert tx1["merchant"] == "未知商户"
+
+
+async def test_list_pending_classifications_handles_404_via_error_envelope(setup_tool):
+    setup_tool(
+        "app.tools.list_pending_classifications", {"detail": "not found"}, status=404,
+    )
+    h = get_handler("list_pending_classifications")
+
+    result = await h({})
+    payload = json.loads(result[0].text)
+    assert "error" in payload
+    assert payload["error"]["code"] == "NOT_FOUND"
+
+
+def test_list_pending_classifications_input_schema_valid_json_schema():
+    import app.tools.list_pending_classifications  # noqa: F401
+    defs = get_tool_definitions()
+    tool = next(t for t in defs if t.name == "list_pending_classifications")
+    schema = tool.inputSchema
+    assert schema["type"] == "object"
+    assert "properties" in schema
+    for name, prop in schema["properties"].items():
+        assert "type" in prop, f"property {name} missing 'type'"

@@ -52,3 +52,28 @@ def mock_backend(
         return client
 
     return _factory
+
+
+@pytest.fixture
+def setup_tool(mock_backend):
+    """Generic factory for tool tests:
+
+        captured = setup_tool("app.tools.list_transactions", payload, status=200)
+        result = await get_handler("list_transactions")({...})
+
+    Returns the captured request list. Pass status= to test error paths.
+    """
+    import importlib
+
+    def _setup(module_path: str, response_payload: dict, *, status: int = 200):
+        captured: list[httpx.Request] = []
+
+        def handler(req: httpx.Request) -> httpx.Response:
+            captured.append(req)
+            return httpx.Response(status, json=response_payload)
+
+        mock_backend(handler)
+        importlib.import_module(module_path)
+        return captured
+
+    return _setup

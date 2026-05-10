@@ -4,22 +4,9 @@ from __future__ import annotations
 import json
 from urllib.parse import parse_qs, urlparse
 
-import httpx
 import pytest
 
 from app.tools import get_handler, get_tool_definitions
-
-
-def _setup_tool(mock_backend, response_payload, status: int = 200):
-    captured: list[httpx.Request] = []
-
-    def handler(req: httpx.Request) -> httpx.Response:
-        captured.append(req)
-        return httpx.Response(status, json=response_payload)
-
-    mock_backend(handler)
-    import app.tools.find_merchant  # noqa: F401
-    return captured
 
 
 @pytest.fixture
@@ -49,8 +36,8 @@ def test_find_merchant_tool_definition_present():
     assert "find_merchant" in names
 
 
-async def test_find_merchant_passes_keyword(mock_backend, sample):
-    captured = _setup_tool(mock_backend, sample)
+async def test_find_merchant_passes_keyword(setup_tool, sample):
+    captured = setup_tool("app.tools.find_merchant", sample)
     handler = get_handler("find_merchant")
     assert handler is not None
 
@@ -63,8 +50,8 @@ async def test_find_merchant_passes_keyword(mock_backend, sample):
     assert qs["limit"] == ["30"]
 
 
-async def test_find_merchant_returns_aggregated_items(mock_backend, sample):
-    _setup_tool(mock_backend, sample)
+async def test_find_merchant_returns_aggregated_items(setup_tool, sample):
+    setup_tool("app.tools.find_merchant", sample)
     handler = get_handler("find_merchant")
 
     result = await handler({"keyword": "瑞幸"})
@@ -74,7 +61,10 @@ async def test_find_merchant_returns_aggregated_items(mock_backend, sample):
     assert "items" not in payload
     merchants = payload["merchants"]
     assert len(merchants) == 2
-    # 每条字段直传(normalized/count/total_amount/sample_categories)
+    # 每条字段直传(normalized/count/total_amount/sample_categories) — 严格 4 字段
+    expected_keys = {"normalized", "count", "total_amount", "sample_categories"}
+    for m in merchants:
+        assert set(m.keys()) == expected_keys
     m0 = merchants[0]
     assert m0["normalized"] == "瑞幸咖啡"
     assert m0["count"] == 12
@@ -82,10 +72,10 @@ async def test_find_merchant_returns_aggregated_items(mock_backend, sample):
     assert m0["sample_categories"] == [11, 12]
 
 
-async def test_find_merchant_missing_keyword_validation(mock_backend):
+async def test_find_merchant_missing_keyword_validation(setup_tool):
     """backend 422 → VALIDATION_ERROR envelope。"""
-    _setup_tool(
-        mock_backend,
+    setup_tool(
+        "app.tools.find_merchant",
         {"detail": "keyword required"},
         status=422,
     )
@@ -96,3 +86,16 @@ async def test_find_merchant_missing_keyword_validation(mock_backend):
     payload = json.loads(result[0].text)
     assert "error" in payload
     assert payload["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_find_merchant_input_schema_valid_json_schema():
+    import app.tools.find_merchant  # noqa: F401
+    defs = get_tool_definitions()
+    tool = next(t for t in defs if t.name == "find_merchant")
+    schema = tool.inputSchema
+    assert schema["type"] == "object"
+    assert "properties" in schema
+    for name, prop in schema["properties"].items():
+        assert "type" in prop, f"property {name} missing 'type'"
+    # find_merchant 必传 keyword
+    assert "keyword" in schema.get("required", [])

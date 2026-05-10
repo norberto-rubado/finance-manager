@@ -6,7 +6,6 @@ backend endpoint: GET /api/dedup/pending
 """
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from mcp import types as mcp_types
@@ -14,6 +13,7 @@ from mcp import types as mcp_types
 from app.backend_client import get_backend_client
 from app.errors import MCPToolError
 from app.tools import register
+from app.tools._helpers import error_envelope, pick, text_envelope
 
 _TOOL = mcp_types.Tool(
     name="list_pending_dedup_pairs",
@@ -39,15 +39,6 @@ _TOOL = mcp_types.Tool(
 )
 
 
-def _to_query(args: dict[str, Any]) -> dict[str, str | int]:
-    """剔除 None,把 MCP 入参直传 backend query string(参数名一致)。"""
-    out: dict[str, str | int] = {}
-    for k in ("limit", "offset"):
-        if k in args and args[k] is not None:
-            out[k] = args[k]
-    return out
-
-
 def _trim_pair(p: dict) -> dict:
     """spec § 8.1 read #5:rename primary_tx_id→primary, mirror_tx_id→mirror;
     drop status/created_at/decided_at/user_id。"""
@@ -64,16 +55,16 @@ def _trim_pair(p: dict) -> dict:
 async def _handler(args: dict[str, Any]) -> list[mcp_types.TextContent]:
     client = get_backend_client()
     try:
-        data = await client.get("/api/dedup/pending", params=_to_query(args))
+        data = await client.get(
+            "/api/dedup/pending",
+            params=pick(args, "limit", "offset"),
+        )
     except MCPToolError as e:
-        return [mcp_types.TextContent(
-            type="text",
-            text=json.dumps({"error": e.to_dict()}, ensure_ascii=False),
-        )]
+        return error_envelope(e)
     out = {
         "pairs": [_trim_pair(p) for p in data.get("items", [])],
     }
-    return [mcp_types.TextContent(type="text", text=json.dumps(out, ensure_ascii=False))]
+    return text_envelope(out)
 
 
 register(_TOOL, _handler)
