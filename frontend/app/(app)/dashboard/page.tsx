@@ -7,8 +7,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { MonthPicker, type MonthValue } from '@/components/dashboard/month-picker';
 import { BudgetSummaryCard } from '@/components/dashboard/budget-summary-card';
-import { MonthPaceCard } from '@/components/dashboard/month-pace-card';
+import { CategoryBudgetList } from '@/components/dashboard/category-budget-list';
 import { CumulativeChart } from '@/components/dashboard/cumulative-chart';
+import { MonthPaceCard } from '@/components/dashboard/month-pace-card';
+import { PendingActionsCard } from '@/components/dashboard/pending-actions-card';
 import { getDashboardSnapshot } from '@/lib/api/dashboard';
 import type { DashboardSnapshot } from '@/lib/api/types';
 
@@ -134,7 +136,19 @@ function DashboardView() {
         budget={snap.total.budget}
       />
 
-      {/* 切片 D 在这下面会加 <CategoryBudgetList> + <PendingActionsCard> */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2" id="category-budget-list">
+          <CategoryBudgetList
+            categories={snap.categories}
+            periodYear={snap.period.year}
+            periodMonth={snap.period.month}
+            editable={snap.period.is_current_month}
+            onSaved={() => setRefreshKey((k) => k + 1)}
+          />
+        </div>
+        {snap.period.is_current_month && <PendingActionsCard pending={snap.pending} />}
+      </div>
+
       {/* 切片 E 在这下面会加 <CategoryDonut> + <MonthlyTrendBars> */}
     </div>
   );
