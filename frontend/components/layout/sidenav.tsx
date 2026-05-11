@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Home,
+  LayoutDashboard,
   ListOrdered,
   Upload,
   Wallet,
@@ -15,6 +16,7 @@ import { cn } from '@/lib/utils/cn';
 
 const NAV = [
   { href: '/', label: '首页', icon: Home },
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/transactions', label: '交易', icon: ListOrdered },
   { href: '/statements', label: '导入', icon: Upload },
   { href: '/accounts', label: '账户', icon: Wallet },
