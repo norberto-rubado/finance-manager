@@ -19,6 +19,13 @@ from sqlalchemy.orm import Session
 from app.models import Budget, Category, DedupCandidate, Transaction
 from app.services.summary import compute_summary
 
+_CENT = Decimal("0.01")
+
+
+def _q2(value: Decimal) -> Decimal:
+    """统一 Decimal 输出精度,确保 JSON 序列化为 "0.00" 而非 "0"。"""
+    return Decimal(str(value)).quantize(_CENT)
+
 
 def _month_window(year: int, month: int) -> tuple[datetime, datetime]:
     """返回 [YYYY-MM-01 00:00, 下月1日 00:00)。"""
@@ -140,7 +147,7 @@ def compute_dashboard_snapshot(
     # 把 breakdown 按 category_id 索引
     spent_by_cat: dict[int | None, Decimal] = {}
     for item in this_summary["breakdown"]:
-        spent_by_cat[item["group_id"]] = Decimal(str(item["amount"]))
+        spent_by_cat[item["group_id"]] = _q2(Decimal(str(item["amount"])))
 
     # ---- 上月 total expense ----
     prev_y, prev_m = _shift_month(query_year, query_month, -1)
@@ -148,7 +155,7 @@ def compute_dashboard_snapshot(
     prev_summary = compute_summary(
         db, user_id=user_id, date_from=prev_start, date_to=prev_end, group_by="category",
     )
-    prev_total = Decimal(str(prev_summary["total_expense"]))
+    prev_total = _q2(prev_summary["total_expense"])
 
     # ---- pace ----
     pace = _compute_pace(
@@ -177,8 +184,8 @@ def compute_dashboard_snapshot(
         b_pair = category_budgets.get(cat.id)
         budget_amt = b_pair[0] if b_pair else None
         note = b_pair[1] if b_pair else None
-        spent = spent_by_cat.get(cat.id, Decimal("0"))
-        avg = avg_by_cat.get(cat.id, Decimal("0"))
+        spent = spent_by_cat.get(cat.id, _q2(Decimal("0")))
+        avg = avg_by_cat.get(cat.id, _q2(Decimal("0")))
         is_over = budget_amt is not None and spent > budget_amt
         categories_out.append({
             "category_id": cat.id,
@@ -203,8 +210,8 @@ def compute_dashboard_snapshot(
         trend.append({
             "year": y,
             "month": m,
-            "expense": Decimal(str(s["total_expense"])),
-            "income": Decimal(str(s["total_income"])),
+            "expense": _q2(s["total_expense"]),
+            "income": _q2(s["total_income"]),
         })
 
     # ---- pending(仅本月有意义,非本月时清零)----
@@ -235,8 +242,8 @@ def compute_dashboard_snapshot(
         },
         "total": {
             "budget": total_budget,
-            "spent": Decimal(str(this_summary["total_expense"])),
-            "income": Decimal(str(this_summary["total_income"])),
+            "spent": _q2(this_summary["total_expense"]),
+            "income": _q2(this_summary["total_income"]),
             "prev_month_spent": prev_total,
         },
         "pace": pace,
