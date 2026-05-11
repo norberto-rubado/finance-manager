@@ -89,9 +89,9 @@ export function CumulativeChart({
         {error ? (
           <p className="text-sm text-destructive">加载失败:{error}</p>
         ) : points === null ? (
-          <Skeleton className="h-64 w-full" />
+          <Skeleton className="h-48 w-full md:h-64" />
         ) : (
-          <div className="h-64 w-full">
+          <div className="h-48 w-full md:h-64">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart
                 data={points}
