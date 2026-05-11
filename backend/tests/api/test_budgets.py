@@ -79,3 +79,32 @@ def test_put_validates_amount_negative(logged_in_client):
         "category_id": None, "amount": "-100", "note": None,
     })
     assert r.status_code == 422
+
+
+def test_delete_happy(logged_in_client):
+    r = logged_in_client.put("/api/budgets", json={
+        "period_year": 2026, "period_month": 5,
+        "category_id": None, "amount": "3000", "note": None,
+    })
+    bid = r.json()["id"]
+    r = logged_in_client.delete(f"/api/budgets/{bid}")
+    assert r.status_code == 204
+    rl = logged_in_client.get("/api/budgets?year=2026&month=5")
+    assert rl.json() == []
+
+
+def test_delete_not_found(logged_in_client):
+    r = logged_in_client.delete("/api/budgets/99999")
+    assert r.status_code == 404
+
+
+def test_delete_other_user_404(logged_in_client, db):
+    """删别人的 budget 应返 404(避免泄露存在性)。"""
+    from app.models import User
+    other = User(username="other-user", password_hash="x")
+    db.add(other); db.flush()
+    b = Budget(user_id=other.id, period_year=2026, period_month=5,
+               category_id=None, amount=Decimal("100"))
+    db.add(b); db.flush()
+    r = logged_in_client.delete(f"/api/budgets/{b.id}")
+    assert r.status_code == 404

@@ -1,5 +1,6 @@
 """Budgets API — spec § 4.4。"""
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Response, status
+from sqlalchemy import select
 
 from app.api.deps import CurrentUserDep, DbDep
 from app.models import Budget
@@ -36,3 +37,18 @@ def upsert_endpoint(
         amount=body.amount,
         note=body.note,
     )
+
+
+@router.delete("/{budget_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_endpoint(
+    user: CurrentUserDep, db: DbDep,
+    budget_id: int,
+) -> Response:
+    b = db.execute(
+        select(Budget).where(Budget.id == budget_id, Budget.user_id == user.id)
+    ).scalar_one_or_none()
+    if b is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "budget not found")
+    db.delete(b)
+    db.flush()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
