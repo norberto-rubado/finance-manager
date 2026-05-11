@@ -11,6 +11,8 @@ import { CategoryBudgetList } from '@/components/dashboard/category-budget-list'
 import { CumulativeChart } from '@/components/dashboard/cumulative-chart';
 import { MonthPaceCard } from '@/components/dashboard/month-pace-card';
 import { PendingActionsCard } from '@/components/dashboard/pending-actions-card';
+import { CategoryDonut } from '@/components/dashboard/category-donut';
+import { MonthlyTrendBars } from '@/components/dashboard/monthly-trend-bars';
 import { getDashboardSnapshot } from '@/lib/api/dashboard';
 import type { DashboardSnapshot } from '@/lib/api/types';
 
@@ -149,7 +151,14 @@ function DashboardView() {
         {snap.period.is_current_month && <PendingActionsCard pending={snap.pending} />}
       </div>
 
-      {/* 切片 E 在这下面会加 <CategoryDonut> + <MonthlyTrendBars> */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <CategoryDonut categories={snap.categories} />
+        <MonthlyTrendBars
+          points={snap.monthly_trend}
+          highlightYear={snap.period.year}
+          highlightMonth={snap.period.month}
+        />
+      </div>
     </div>
   );
 }
