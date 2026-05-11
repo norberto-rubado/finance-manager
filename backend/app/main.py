@@ -7,6 +7,7 @@ from app.api import admin_tokens as admin_tokens_api
 from app.api import auth as auth_api
 from app.api import budgets as budgets_api
 from app.api import categories as categories_api
+from app.api import dashboard as dashboard_api
 from app.api import dedup as dedup_api
 from app.api import rules as rules_api
 from app.api import statements as statements_api
@@ -40,5 +41,6 @@ api_router.include_router(categories_api.router)
 api_router.include_router(rules_api.router)
 api_router.include_router(summary_api.router)
 api_router.include_router(budgets_api.router)
+api_router.include_router(dashboard_api.router)
 api_router.include_router(admin_tokens_api.router)
 app.include_router(api_router)
