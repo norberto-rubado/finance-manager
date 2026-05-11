@@ -56,7 +56,7 @@ export function MonthPaceCard({ period, total, pace }: Props) {
             </dd>
           </div>
           <div>
-            <dt className="text-xs text-muted-foreground">应该花</dt>
+            <dt className="text-xs text-muted-foreground">已过进度</dt>
             <dd className="mt-1 text-lg font-semibold tabular-nums">
               {fmtPercent(pace.expected_ratio, 0)}
             </dd>
