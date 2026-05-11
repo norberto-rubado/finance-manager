@@ -39,6 +39,9 @@ def test_snapshot_no_budget(logged_in_client):
     assert body["total"]["budget"] is None
     assert body["pace"]["actual_ratio"] is None
     assert body["pending"]["overspending_count"] == 0
+    # 类别预算未设时 budget 也是 None
+    for c in body["categories"]:
+        assert c["budget"] is None
 
 
 def test_snapshot_month_start_day_1(logged_in_client):
@@ -71,6 +74,7 @@ def test_snapshot_overspending(logged_in_client, db, admin_user, acct, cat_food)
     assert body["pending"]["overspending_count"] == 1
     food = next(c for c in body["categories"] if c["category_id"] == cat_food.id)
     assert food["is_overspending"] is True
+    assert food["budget"] == "1000.00"
 
 
 def test_snapshot_non_current_month(logged_in_client):

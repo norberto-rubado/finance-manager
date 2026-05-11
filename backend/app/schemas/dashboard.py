@@ -21,7 +21,7 @@ class SnapshotTotal(BaseModel):
 
 class SnapshotPace(BaseModel):
     expected_ratio: float          # day_of_month / total_days
-    actual_ratio: float | None     # spent / budget;无总预算 = None
+    actual_ratio: float | None     # spent / budget;budget=None 或 budget=0 时 = None
     delta_pct: float | None        # (actual - expected) / expected * 100
 
 

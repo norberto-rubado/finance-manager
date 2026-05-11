@@ -7,6 +7,13 @@
 - 三月均值(per category)
 - 6 月趋势(每月一次 compute_summary 总额)
 - pending count(未分类 + dedup pending + overspending)
+
+NOTE (known): compute_summary uses inclusive `tx_time <= date_to`, but
+this module passes next-month-1st as date_to. A transaction at exactly
+`YYYY-MM-01 00:00:00` could double-count into adjacent monthly trend
+buckets. In practice tx_time precision is sub-second so probability is
+near zero; tracked for future cleanup when compute_summary is migrated
+to half-open `< date_to` semantics across all callers.
 """
 from calendar import monthrange
 from datetime import date, datetime
@@ -134,9 +141,9 @@ def compute_dashboard_snapshot(
     category_budgets: dict[int, tuple[Decimal, str | None]] = {}
     for b in budgets:
         if b.category_id is None:
-            total_budget = b.amount
+            total_budget = _q2(b.amount)
         else:
-            category_budgets[b.category_id] = (b.amount, b.note)
+            category_budgets[b.category_id] = (_q2(b.amount), b.note)
 
     # ---- 本月 expense / income / 分类 breakdown ----
     start, end = _month_window(query_year, query_month)
@@ -172,6 +179,7 @@ def compute_dashboard_snapshot(
     )
 
     # ---- categories 列表(所有 expense 类别 + 有本月支出的)----
+    # 只保留 expense 类:income / refund 不出现在预算 vs 实花对比里
     all_cats = list(db.execute(
         select(Category).where(
             Category.user_id == user_id,
