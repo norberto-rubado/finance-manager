@@ -18,8 +18,8 @@ interface ChipProps {
 }
 
 const TONE_CLASS: Record<ChipProps['tone'], string> = {
-  warning: 'border-rose-500/40 bg-rose-500/10 text-rose-200',
-  info: 'border-amber-500/40 bg-amber-500/10 text-amber-200',
+  warning: 'border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-200',
+  info: 'border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-200',
   neutral: 'border-border bg-muted text-muted-foreground',
 };
 
