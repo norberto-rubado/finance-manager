@@ -108,3 +108,38 @@ def test_delete_other_user_404(logged_in_client, db):
     db.add(b); db.flush()
     r = logged_in_client.delete(f"/api/budgets/{b.id}")
     assert r.status_code == 404
+
+
+def test_copy_from_happy(logged_in_client, db, admin_user):
+    db.add(Budget(user_id=admin_user.id, period_year=2026, period_month=4,
+                  category_id=None, amount=Decimal("3000"), note="4 月总"))
+    db.flush()
+    r = logged_in_client.post("/api/budgets/copy-from", json={
+        "from_year": 2026, "from_month": 4,
+        "to_year": 2026, "to_month": 5,
+    })
+    assert r.status_code == 200
+    assert len(r.json()) == 1
+    rl = logged_in_client.get("/api/budgets?year=2026&month=5")
+    assert rl.json()[0]["amount"] == "3000.00"
+    assert rl.json()[0]["note"] == "4 月总"
+
+
+def test_copy_from_empty_source(logged_in_client):
+    r = logged_in_client.post("/api/budgets/copy-from", json={
+        "from_year": 2026, "from_month": 3,
+        "to_year": 2026, "to_month": 5,
+    })
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+def test_copy_from_target_conflict(logged_in_client, db, admin_user):
+    db.add(Budget(user_id=admin_user.id, period_year=2026, period_month=5,
+                  category_id=None, amount=Decimal("4000")))
+    db.flush()
+    r = logged_in_client.post("/api/budgets/copy-from", json={
+        "from_year": 2026, "from_month": 4,
+        "to_year": 2026, "to_month": 5,
+    })
+    assert r.status_code == 409

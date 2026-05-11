@@ -52,3 +52,24 @@ def delete_endpoint(
     db.delete(b)
     db.flush()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/copy-from", response_model=list[BudgetOut])
+def copy_from_endpoint(
+    user: CurrentUserDep, db: DbDep,
+    body: BudgetCopyIn,
+) -> list[Budget]:
+    created, conflict = copy_budgets_from(
+        db,
+        user_id=user.id,
+        from_year=body.from_year,
+        from_month=body.from_month,
+        to_year=body.to_year,
+        to_month=body.to_month,
+    )
+    if conflict:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "target month already has budget entries; clear them first",
+        )
+    return created
