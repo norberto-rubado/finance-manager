@@ -64,7 +64,8 @@ def test_put_updates_existing(logged_in_client):
 
 def test_put_with_category(logged_in_client, db, admin_user):
     cat = Category(user_id=admin_user.id, name="餐饮-api", kind="expense")
-    db.add(cat); db.flush()
+    db.add(cat)
+    db.flush()
     r = logged_in_client.put("/api/budgets", json={
         "period_year": 2026, "period_month": 5,
         "category_id": cat.id, "amount": "1500", "note": None,
@@ -102,10 +103,12 @@ def test_delete_other_user_404(logged_in_client, db):
     """删别人的 budget 应返 404(避免泄露存在性)。"""
     from app.models import User
     other = User(username="other-user", password_hash="x")
-    db.add(other); db.flush()
+    db.add(other)
+    db.flush()
     b = Budget(user_id=other.id, period_year=2026, period_month=5,
                category_id=None, amount=Decimal("100"))
-    db.add(b); db.flush()
+    db.add(b)
+    db.flush()
     r = logged_in_client.delete(f"/api/budgets/{b.id}")
     assert r.status_code == 404
 
@@ -119,7 +122,9 @@ def test_copy_from_happy(logged_in_client, db, admin_user):
         "to_year": 2026, "to_month": 5,
     })
     assert r.status_code == 200
-    assert len(r.json()) == 1
+    items = r.json()
+    assert len(items) == 1
+    assert items[0]["amount"] == "3000.00"
     rl = logged_in_client.get("/api/budgets?year=2026&month=5")
     assert rl.json()[0]["amount"] == "3000.00"
     assert rl.json()[0]["note"] == "4 月总"

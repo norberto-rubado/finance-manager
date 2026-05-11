@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.models import Budget, Category, User
+from app.models import Category, User
 from app.services.budget import copy_budgets_from, list_budgets, upsert_budget
 
 
@@ -35,8 +35,8 @@ def test_upsert_creates_new(db, admin):
 def test_upsert_updates_existing(db, admin):
     upsert_budget(db, user_id=admin.id, period_year=2026, period_month=5,
                   category_id=None, amount=Decimal("3000"), note="old")
-    b2 = upsert_budget(db, user_id=admin.id, period_year=2026, period_month=5,
-                       category_id=None, amount=Decimal("3500"), note="new")
+    upsert_budget(db, user_id=admin.id, period_year=2026, period_month=5,
+                  category_id=None, amount=Decimal("3500"), note="new")
     rows = list_budgets(db, user_id=admin.id, period_year=2026, period_month=5)
     assert len(rows) == 1
     assert rows[0].amount == Decimal("3500.00")

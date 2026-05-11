@@ -115,4 +115,6 @@ def copy_budgets_from(
         db.add(new)
         created.append(new)
     db.flush()
+    for new in created:
+        db.refresh(new)
     return created, False
