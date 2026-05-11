@@ -278,3 +278,81 @@ export interface SummaryOut {
   total_income: string;
   breakdown: SummaryBreakdownItem[];
 }
+
+// ============ Budget(切片 C) ============
+export interface BudgetIn {
+  period_year: number;
+  period_month: number;
+  category_id: number | null;   // null = 总预算
+  amount: string;                // Decimal as string
+  note: string | null;
+}
+
+export interface BudgetOut extends BudgetIn {
+  id: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BudgetCopyIn {
+  from_year: number;
+  from_month: number;
+  to_year: number;
+  to_month: number;
+}
+
+// ============ Dashboard Snapshot ============
+export interface SnapshotPeriod {
+  year: number;
+  month: number;
+  day_of_month: number;
+  total_days: number;
+  is_current_month: boolean;
+}
+
+export interface SnapshotTotal {
+  budget: string | null;
+  spent: string;
+  income: string;
+  prev_month_spent: string;
+}
+
+export interface SnapshotPace {
+  expected_ratio: number;
+  actual_ratio: number | null;
+  delta_pct: number | null;
+}
+
+export interface SnapshotCategory {
+  category_id: number;
+  name: string;
+  icon: string | null;
+  color: string | null;
+  budget: string | null;
+  spent: string;
+  three_month_avg: string;
+  note: string | null;
+  is_overspending: boolean;
+}
+
+export interface SnapshotTrendPoint {
+  year: number;
+  month: number;
+  expense: string;
+  income: string;
+}
+
+export interface SnapshotPending {
+  uncategorized_count: number;
+  dedup_pending_count: number;
+  overspending_count: number;
+}
+
+export interface DashboardSnapshot {
+  period: SnapshotPeriod;
+  total: SnapshotTotal;
+  pace: SnapshotPace;
+  categories: SnapshotCategory[];
+  monthly_trend: SnapshotTrendPoint[];
+  pending: SnapshotPending;
+}

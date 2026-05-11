@@ -3,7 +3,7 @@ import { ApiClientError, type ApiError } from './types';
 type Json = object | unknown[] | string | number | boolean | null;
 
 interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: Json | FormData;
   query?: Record<string, string | number | boolean | undefined | null>;
   /** 401 时是否跳 /login(默认 true);auth.login 自身设 false */

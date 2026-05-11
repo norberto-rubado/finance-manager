@@ -8,6 +8,7 @@ from app.models.statement_import import StatementImport
 from app.models.transaction import Transaction
 from app.models.dedup_candidate import DedupCandidate
 from app.models.api_token import ApiToken
+from app.models.budget import Budget
 
 __all__ = [
     "Base",
@@ -20,4 +21,5 @@ __all__ = [
     "Transaction",
     "DedupCandidate",
     "ApiToken",
+    "Budget",
 ]

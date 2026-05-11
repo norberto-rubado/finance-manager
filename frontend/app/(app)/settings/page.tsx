@@ -1,3 +1,7 @@
+import Link from 'next/link';
+import { Wallet } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChangePasswordForm } from '@/components/settings/change-password-form';
 import { TokenPlaceholderCard } from '@/components/settings/token-placeholder-card';
@@ -17,6 +21,20 @@ export default function SettingsPage() {
             <span className="text-sm text-muted-foreground">点击切换:</span>
             <ThemeToggle />
           </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>预算管理</CardTitle>
+          <CardDescription>设置月度总预算与各类别预算</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button asChild>
+            <Link href="/settings/budgets">
+              <Wallet className="mr-2 h-4 w-4" />
+              管理预算
+            </Link>
+          </Button>
         </CardContent>
       </Card>
       <ChangePasswordForm />

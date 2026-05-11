@@ -14,7 +14,17 @@ from app.schemas.api_token import (
     ApiTokenVerifyOut,
 )
 from app.schemas.auth import LoginIn, LoginOut, MeOut
+from app.schemas.budget import BudgetCopyIn, BudgetIn, BudgetOut
 from app.schemas.category import CategoryCreate, CategoryOut, CategoryUpdate
+from app.schemas.dashboard import (
+    DashboardSnapshot,
+    SnapshotCategory,
+    SnapshotPace,
+    SnapshotPending,
+    SnapshotPeriod,
+    SnapshotTotal,
+    SnapshotTrendPoint,
+)
 from app.schemas.dedup import DedupDecisionIn, DedupPairOut, PendingPairListOut
 from app.schemas.rule import MerchantRuleCreate, MerchantRuleOut, MerchantRuleUpdate
 from app.schemas.statement import (
@@ -39,6 +49,7 @@ from app.schemas.transaction import (
 __all__ = [
     "LoginIn", "LoginOut", "MeOut",
     "AccountCreate", "AccountOut", "AccountUpdate", "AccountBalanceOut",
+    "BudgetIn", "BudgetOut", "BudgetCopyIn",
     "CategoryCreate", "CategoryOut", "CategoryUpdate",
     "MerchantRuleCreate", "MerchantRuleOut", "MerchantRuleUpdate",
     "StatementImportOut", "StatementImportListOut", "ImportResponse", "ReviewBundle",
@@ -47,6 +58,8 @@ __all__ = [
     "MerchantSearchOut", "MerchantStatItem",
     "DedupPairOut", "PendingPairListOut", "DedupDecisionIn",
     "SummaryOut", "SummaryBreakdownItem",
+    "DashboardSnapshot", "SnapshotPeriod", "SnapshotTotal", "SnapshotPace",
+    "SnapshotCategory", "SnapshotTrendPoint", "SnapshotPending",
     "ApiTokenCreate", "ApiTokenCreateResp", "ApiTokenListOut",
     "ApiTokenOut", "ApiTokenVerifyOut",
 ]
