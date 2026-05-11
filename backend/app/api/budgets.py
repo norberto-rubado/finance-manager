@@ -20,3 +20,19 @@ def list_endpoint(
     month: int = Query(ge=1, le=12),
 ) -> list[Budget]:
     return list_budgets(db, user_id=user.id, period_year=year, period_month=month)
+
+
+@router.put("", response_model=BudgetOut)
+def upsert_endpoint(
+    user: CurrentUserDep, db: DbDep,
+    body: BudgetIn,
+) -> Budget:
+    return upsert_budget(
+        db,
+        user_id=user.id,
+        period_year=body.period_year,
+        period_month=body.period_month,
+        category_id=body.category_id,
+        amount=body.amount,
+        note=body.note,
+    )

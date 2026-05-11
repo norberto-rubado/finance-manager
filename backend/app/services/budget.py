@@ -36,6 +36,7 @@ def upsert_budget(
         existing.amount = amount
         existing.note = note
         db.flush()
+        db.refresh(existing)  # 拉回 Numeric(12,2) 精度 + server_default 时间戳
         return existing
 
     new = Budget(
@@ -48,6 +49,7 @@ def upsert_budget(
     )
     db.add(new)
     db.flush()
+    db.refresh(new)  # 拉回 Numeric(12,2) 精度 + server_default 时间戳
     return new
 
 
