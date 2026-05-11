@@ -107,7 +107,9 @@ export function CategoryDonut({ categories }: Props) {
                     className="h-3 w-3 flex-shrink-0 rounded-sm"
                     style={{ background: s.color }}
                   />
-                  <span className="truncate">{s.name}</span>
+                  <span className="truncate" title={s.name}>
+                    {s.name}
+                  </span>
                   <span className="ml-auto tabular-nums text-muted-foreground">
                     {((s.value / total) * 100).toFixed(0)}%
                   </span>

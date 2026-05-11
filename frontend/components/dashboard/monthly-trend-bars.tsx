@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import {
   Bar,
   BarChart,
@@ -29,13 +30,17 @@ interface BarPoint {
 }
 
 export function MonthlyTrendBars({ points, highlightYear, highlightMonth }: Props) {
-  const data: BarPoint[] = points.map((p) => ({
-    label: `${p.month} 月`,
-    year: p.year,
-    month: p.month,
-    expense: Number(p.expense),
-    isHighlight: p.year === highlightYear && p.month === highlightMonth,
-  }));
+  const data: BarPoint[] = useMemo(
+    () =>
+      points.map((p) => ({
+        label: `${p.month} 月`,
+        year: p.year,
+        month: p.month,
+        expense: Number(p.expense),
+        isHighlight: p.year === highlightYear && p.month === highlightMonth,
+      })),
+    [points, highlightYear, highlightMonth],
+  );
 
   return (
     <Card>

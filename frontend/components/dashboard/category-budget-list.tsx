@@ -182,7 +182,7 @@ function CategoryRow({
           type="button"
           onClick={onEdit}
           aria-label={`调整 ${cat.name} 预算`}
-          className="flex w-full items-center justify-between gap-2 py-2 text-left transition-colors hover:bg-muted/40"
+          className="flex w-full items-center justify-between gap-2 py-2 text-left font-normal transition-colors hover:bg-muted/40"
         >
           {inner}
         </button>

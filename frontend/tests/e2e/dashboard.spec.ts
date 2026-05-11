@@ -21,16 +21,23 @@ test.describe('Dashboard happy path', () => {
 
     // 3. 找一个"调整 <name> 预算"按钮(任意类别,e2e 不挑特定类)。
     //    Slice E 把整行包成 button,aria-label 仍是 "调整 ... 预算" 格式。
+    //    先在 click 之前拿到 aria-label,后面用来定位"被编辑的那一行",
+    //    避免 /999/ 这种宽松正则误中页面其他位置的 ¥xx9.xx。
     const adjustButton = page.getByRole('button', { name: /^调整.*预算$/ }).first();
+    const ariaLabel = await adjustButton.getAttribute('aria-label');
+    expect(ariaLabel).toMatch(/^调整\s*(.+?)\s*预算$/);
+    const categoryNameMatch = ariaLabel!.match(/^调整\s*(.+?)\s*预算$/);
+    const categoryName = categoryNameMatch![1];
+
     await adjustButton.click();
 
     // 4. Dialog 出现
     await expect(page.getByRole('dialog')).toBeVisible();
     await expect(page.getByText(/调整预算 —/)).toBeVisible();
 
-    // 5. 输入金额(以 999 这个独特数字便于断言)
+    // 5. 输入金额(用 12345 这个独特数字,避免与页面已有 ¥9xx 冲突)
     const amountInput = page.getByLabel('金额(¥)');
-    await amountInput.fill('999');
+    await amountInput.fill('12345');
 
     // 6. 点保存
     await page.getByRole('button', { name: '保存' }).click();
@@ -39,13 +46,16 @@ test.describe('Dashboard happy path', () => {
     await expect(page.getByRole('dialog')).not.toBeVisible();
     await expect(page.getByText('保存成功')).toBeVisible();
 
-    // 8. 类别列表里出现 999(被 fmtMoney 格式化为 "999.00")
-    await expect(page.getByText(/999/).first()).toBeVisible();
+    // 8. 在被编辑的那一行(通过 aria-label 精确定位)里出现 "12,345"
+    //    fmtMoney 会输出 "12,345.00";为兼容潜在的格式差异允许逗号可选。
+    const editedRow = page.getByRole('button', { name: `调整 ${categoryName} 预算` });
+    await expect(editedRow).toContainText(/12,?345/);
 
-    // 9. 刷新,值仍保留
+    // 9. 刷新,值仍保留在同一行
     await page.reload();
     await expect(page.getByText('类别预算')).toBeVisible();
-    await expect(page.getByText(/999/).first()).toBeVisible();
+    const reloadedRow = page.getByRole('button', { name: `调整 ${categoryName} 预算` });
+    await expect(reloadedRow).toContainText(/12,?345/);
   });
 });
 
