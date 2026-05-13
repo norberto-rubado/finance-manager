@@ -63,7 +63,12 @@ def _parse_amount(val) -> Decimal:
 
 
 def _to_str(val) -> str:
-    """None 和斜杠占位都视作空串。"""
+    """None 和斜杠占位都视作空串。
+
+    重要:仅当 strip 后**整字段就是单个 "/"** 时才视为占位。
+    商户名含 "/" 字符(如 "A/B 公司"、"/start"、"end/")必须原样保留 ——
+    不要改成 `_SLASH in s` 或类似 contains 判断,否则会吞掉合法商户名。
+    """
     if val is None:
         return ""
     s = str(val).strip()

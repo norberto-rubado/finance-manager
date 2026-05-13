@@ -153,11 +153,28 @@ class TestToStr:
     def test_slash_returns_empty(self):
         assert _to_str("/") == ""
 
+    def test_slash_with_surrounding_whitespace_returns_empty(self):
+        """微信账单偶有 " / " 这种带空白的占位,strip 后视为占位。"""
+        assert _to_str(" / ") == ""
+
     def test_normal_string(self):
         assert _to_str("hello") == "hello"
 
     def test_strips_whitespace(self):
         assert _to_str("  hello  ") == "hello"
+
+    # 回归 B-poly-3:含 "/" 但非纯占位的商户名必须原样保留
+    def test_merchant_with_internal_slash_preserved(self):
+        assert _to_str("A/B 公司") == "A/B 公司"
+
+    def test_merchant_starts_with_slash_preserved(self):
+        assert _to_str("/start") == "/start"
+
+    def test_merchant_ends_with_slash_preserved(self):
+        assert _to_str("end/") == "end/"
+
+    def test_short_two_char_with_slash_preserved(self):
+        assert _to_str("a/b") == "a/b"
 
 
 class TestInferTxKind:
