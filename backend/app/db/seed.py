@@ -55,9 +55,13 @@ def ensure_default_user(db: Session) -> User:
 def run_seed() -> None:
     with db_session() as db:
         user = ensure_default_user(db)
-        cat_count = seed_default_categories(db, default_user_id=user.id)
-        rule_count = seed_default_merchant_rules(db, default_user_id=user.id)
-        print(f"[seed] user_id={user.id}, categories seeded={cat_count}, rules inserted={rule_count}")
+        cat_created, cat_total = seed_default_categories(db, default_user_id=user.id)
+        rule_created, rule_total = seed_default_merchant_rules(db, default_user_id=user.id)
+        print(
+            f"[seed] user_id={user.id}, "
+            f"categories: {cat_created} new / {cat_total} total, "
+            f"rules: {rule_created} new / {rule_total} total"
+        )
 
 
 if __name__ == "__main__":

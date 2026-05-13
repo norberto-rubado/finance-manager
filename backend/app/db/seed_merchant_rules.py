@@ -67,10 +67,16 @@ def _resolve_category_id(db: Session, user_id: int, path: str) -> int | None:
     return cat.id if cat else None
 
 
-def seed_default_merchant_rules(db: Session, default_user_id: int) -> int:
-    """seed 种子规则。幂等:(user_id, pattern, match_kind) 唯一。"""
-    inserted = 0
+def seed_default_merchant_rules(db: Session, default_user_id: int) -> tuple[int, int]:
+    """seed 种子规则。幂等:(user_id, pattern, match_kind) 唯一。
+
+    返回 (created, total) — created 是本次新增数,total 是种子定义里的总条目数。
+    与 seed_default_categories 的契约对齐,便于 run_seed 统一打印 "N new / M total"。
+    """
+    created = 0
+    total = 0
     for pattern, match_kind, cat_path, priority in _RULES:
+        total += 1
         # 幂等检查
         stmt = select(MerchantRule).where(
             MerchantRule.user_id == default_user_id,
@@ -89,6 +95,6 @@ def seed_default_merchant_rules(db: Session, default_user_id: int) -> int:
             priority=priority,
         )
         db.add(rule)
-        inserted += 1
+        created += 1
     db.flush()
-    return inserted
+    return created, total

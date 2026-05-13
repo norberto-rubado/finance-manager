@@ -42,7 +42,8 @@ _TREE: list[tuple[str, str, int, list[tuple[str, int]]]] = [
 
 def _get_or_create(
     db: Session, *, user_id: int, name: str, parent_id: int | None, kind: str, sort_order: int
-) -> Category:
+) -> tuple[Category, bool]:
+    """返回 (category, created)。created=True 表示本次新建。"""
     stmt = select(Category).where(
         Category.user_id == user_id,
         Category.name == name,
@@ -50,27 +51,36 @@ def _get_or_create(
     )
     existing = db.execute(stmt).scalar_one_or_none()
     if existing is not None:
-        return existing
+        return existing, False
     cat = Category(
         user_id=user_id, name=name, parent_id=parent_id, kind=kind, sort_order=sort_order
     )
     db.add(cat)
     db.flush()
-    return cat
+    return cat, True
 
 
-def seed_default_categories(db: Session, default_user_id: int) -> int:
-    """seed 默认分类树。返回插入/已存在的总分类数。"""
-    count = 0
+def seed_default_categories(db: Session, default_user_id: int) -> tuple[int, int]:
+    """seed 默认分类树。返回 (created, total)。
+
+    created 是本次新建的分类行数(幂等二次跑 = 0),total 是种子定义里的总条目数。
+    历史版本仅返回 total,二次跑误导运维以为"又插了 46 条"。
+    """
+    created = 0
+    total = 0
     for top_name, kind, top_order, children in _TREE:
-        top = _get_or_create(
+        top, was_created = _get_or_create(
             db, user_id=default_user_id, name=top_name, parent_id=None, kind=kind, sort_order=top_order
         )
-        count += 1
+        total += 1
+        if was_created:
+            created += 1
         for child_name, child_order in children:
-            _get_or_create(
+            _, child_was_created = _get_or_create(
                 db, user_id=default_user_id, name=child_name,
                 parent_id=top.id, kind=kind, sort_order=child_order,
             )
-            count += 1
-    return count
+            total += 1
+            if child_was_created:
+                created += 1
+    return created, total

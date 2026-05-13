@@ -1,4 +1,6 @@
 """默认分类树 seed 测试:幂等 + 顶级分类齐全。"""
+import uuid
+
 import pytest
 from sqlalchemy.orm import Session
 
@@ -7,42 +9,48 @@ from app.models import Category, User
 
 
 @pytest.fixture
-def admin_user(db: Session) -> User:
-    """Idempotent: 不论 db 里有没有 admin,都返回该 user。
-
-    用 ON CONFLICT 兼容 dev db 已有 admin 行的情况(savepoint 不能 rollback
-    constraint violation)。
+def fresh_user(db: Session) -> User:
+    """每个测试独立的临时 user — 避开 dev db 中 admin 已 seed 的 categories,
+    才能断言 created/total 不变量(否则 created 永远是 0)。
+    nested savepoint 会在测试结束 rollback,临时 user 不污染 dev db。
     """
-    from sqlalchemy.dialects.postgresql import insert as pg_insert
-    stmt = (
-        pg_insert(User)
-        .values(username="admin", password_hash="$2b$12$dummy")
-        .on_conflict_do_nothing(index_elements=["username"])
+    user = User(
+        username=f"test_seed_{uuid.uuid4().hex[:8]}",
+        password_hash="$2b$12$dummy",
     )
-    db.execute(stmt)
+    db.add(user)
     db.flush()
-    return db.query(User).filter_by(username="admin").one()
+    return user
 
 
-def test_seed_creates_categories(db: Session, admin_user: User):
-    seed_default_categories(db, default_user_id=admin_user.id)
+EXPECTED_CATEGORY_COUNT = 46  # 9 expense 顶级 + 29 expense leaf + 5 income + 3 neutral
+
+
+def test_seed_creates_categories(db: Session, fresh_user: User):
+    created, total = seed_default_categories(db, default_user_id=fresh_user.id)
     db.commit()
 
-    cats = db.query(Category).all()
-    assert len(cats) >= 12, "应有至少 12 个分类(顶级 + 二级若干)"
+    assert total == EXPECTED_CATEGORY_COUNT
+    assert created == EXPECTED_CATEGORY_COUNT, "首次 seed,created 应等于全部"
+
+    cats = db.query(Category).filter(Category.user_id == fresh_user.id).all()
+    assert len(cats) == EXPECTED_CATEGORY_COUNT
 
     top_names = {c.name for c in cats if c.parent_id is None}
     assert {"餐饮", "交通", "购物", "通讯", "工资", "内部转账"}.issubset(top_names)
 
 
-def test_seed_categories_idempotent(db: Session, admin_user: User):
-    """重复跑 seed 不应出现重复行。"""
-    seed_default_categories(db, default_user_id=admin_user.id)
+def test_seed_categories_idempotent(db: Session, fresh_user: User):
+    """重复跑 seed 不应出现重复行,且 created 应反映"未新增"。"""
+    created1, total1 = seed_default_categories(db, default_user_id=fresh_user.id)
     db.commit()
-    first_count = db.query(Category).count()
+    first_count = db.query(Category).filter(Category.user_id == fresh_user.id).count()
 
-    seed_default_categories(db, default_user_id=admin_user.id)
+    created2, total2 = seed_default_categories(db, default_user_id=fresh_user.id)
     db.commit()
-    second_count = db.query(Category).count()
+    second_count = db.query(Category).filter(Category.user_id == fresh_user.id).count()
 
-    assert first_count == second_count
+    assert first_count == second_count == EXPECTED_CATEGORY_COUNT
+    assert created1 == EXPECTED_CATEGORY_COUNT
+    assert created2 == 0, "二次跑 created 必须为 0,否则误导运维"
+    assert total1 == total2 == EXPECTED_CATEGORY_COUNT
