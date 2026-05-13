@@ -37,6 +37,14 @@ def db() -> Session:
     session.commit() 只 release/create savepoint;teardown rollback 外层 transaction。
     嵌套 try/finally 保证即使中间一步抛错,connection.close() 也一定执行
     (避免 pytest-xdist / 网络抖动场景下连接泄漏)。
+
+    测试间隔离:外层 transaction rollback 后,本次测试期间的所有 INSERT / UPDATE /
+    DELETE(包括看似 commit 过的)都消失,无需手动 truncate。
+
+    注意:savepoint rollback 不能撤销在 fixture 之外、外层 transaction 启动之前就已
+    落盘的数据 —— 例如 `python -m app.db.seed` 在 dev db 留下的 admin user 及其
+    categories / merchant_rules。若测试依赖"空表"前提,请创建临时 user_id(uuid 后缀)
+    绕开残留,参见 tests/test_seed_categories.py::fresh_user。
     """
     connection = _engine.connect()
     outer_tx = connection.begin()
