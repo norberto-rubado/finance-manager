@@ -167,7 +167,7 @@ SELECT name FROM categories WHERE parent_id IS NULL ORDER BY sort_order;  -- 顶
 
 - ~~**B-poly-1** `ccb_credit_pdf.py` 用 codepoint set 匹配中文(`_has_codepoints` / `_identify_currency`),实质是把 Windows GBK 终端显示乱码误判为 PDF 字体编码问题。pdfplumber 实际抽取的是标准 UTF-8。建议改回标准字符串子串匹配(`"银联" in s and "入账" in s`),并修正 docstring 中"自定义字体 subset"的误导说明。~~ ✅ 已在 slice C Task 2 修复(commit hash: 见 git log)
 - ~~**B-poly-2** `_is_repayment("联银账入")` 等乱序输入会误返回 True(因为用 set comparison)。改为子串顺序匹配可消除。~~ ✅ 已在 slice C Task 1 修复(commit hash: 见 git log)
-- **B-poly-3** `wechat_xlsx.py` 的 `_to_str` 把 "/" 字面值视为占位符,会误处理真实商户名含 "/" 的情况(如 "A/B 公司")。本切片真实样本未触发,留待 slice C 分类引擎遇到时处理。
+- ~~**B-poly-3** `wechat_xlsx.py` 的 `_to_str` 把 "/" 字面值视为占位符,会误处理真实商户名含 "/" 的情况(如 "A/B 公司")。~~ ✅ 已在 commit `84c149a` 修复 — 实际代码已正确(只匹配整字段 `==/`),但 docstring 明确警告别改成 `contains`,并加 5 条回归测试覆盖 "A/B 公司" / "/start" / "end/" / "a/b" / " / "。
 - **B-poly-4** `seed.py` 真实 `python -m app.db.seed` 跑后会在 dev db 留持久 admin 行,导致 test 必须用 `ON CONFLICT` 兜底(已在 commit `80e6908` 解决)。根本修复:slice C 启动 finance_test 独立 db 后启用 TEST_DATABASE_URL。
 
 ### 切片 D 实施期间引入(已在 slice E Task 0 闭环)
@@ -176,13 +176,13 @@ SELECT name FROM categories WHERE parent_id IS NULL ORDER BY sort_order;  -- 顶
 
 ### Polish(后续任意切片处理)
 
-- **I-4** `seed_default_categories` 返回值"总数"(46)而非"新增数",二次跑误导运维。改为返回 `(created, total)` 或仅 `created`。
+- ~~**I-4** `seed_default_categories` 返回值"总数"(46)而非"新增数",二次跑误导运维。改为返回 `(created, total)` 或仅 `created`。~~ ✅ 已在 commit `dbe9bae` 修复(`seed_default_categories` / `seed_default_merchant_rules` 返回 `(created, total)`,`run_seed` 打印 "N new / M total")
 - **M-1** `alembic.ini` 的 `post_write_hooks` 配置 ruff,但 venv 外执行时找不到。改用 `python -m ruff` 或显式 venv 路径。
 - **M-2** `conftest.py` 的 `db` fixture rollback 注释有误导,应说明数据靠 `_truncate_between_tests` 清理。
-- **M-3** `test_seed_*` 断言用 `>= 12 / >= 25` 太松,应改为 `== 46 / == 29` 严格匹配。
-- **M-4** `config.py` 的 `Union[str, List[str]]` 改 PEP 604 风格 `str | list[str]`。
+- ~~**M-3** `test_seed_*` 断言用 `>= 12 / >= 25` 太松,应改为 `== 46 / == 29` 严格匹配。~~ ✅ 已在 commit `dbe9bae` 修复 — 顺带把 `admin_user` fixture 换成 `fresh_user`(uuid 临时用户),让"首次 seed `created == EXPECTED`"和"二次 seed `created == 0`"两个不变量在 dev db 有遗留数据时也成立
+- ~~**M-4** `config.py` 的 `Union[str, List[str]]` 改 PEP 604 风格 `str | list[str]`。~~ ✅ 已在 commit `a4a8422` 修复(`backend_cors_origins: str | list[str]`,移除 `typing.Union/List` import)
 - **M-5** `TimestampMixin.updated_at` 的 `onupdate=func.now()` 仅 ORM 层生效,裸 SQL 不更新。base.py docstring 说明限制。
-- **M-6** `.env.example` 中 `DATABASE_URL=...@db:5432` 是 docker 内网 host,本机 venv 应用 `localhost`。加注释说明两种用法。
+- ~~**M-6** `.env.example` 中 `DATABASE_URL=...@db:5432` 是 docker 内网 host,本机 venv 应用 `localhost`。加注释说明两种用法。~~ ✅ 已在 commit `2f6d3e8` 修复(注释明示三档:`@127.0.0.1:5432` venv / `@db:5432` docker dev / `@db_prod:5432` docker prod)
 
 ### slice E 完成时识别的 V2 候选
 
