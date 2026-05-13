@@ -177,11 +177,11 @@ SELECT name FROM categories WHERE parent_id IS NULL ORDER BY sort_order;  -- 顶
 ### Polish(后续任意切片处理)
 
 - ~~**I-4** `seed_default_categories` 返回值"总数"(46)而非"新增数",二次跑误导运维。改为返回 `(created, total)` 或仅 `created`。~~ ✅ 已在 commit `dbe9bae` 修复(`seed_default_categories` / `seed_default_merchant_rules` 返回 `(created, total)`,`run_seed` 打印 "N new / M total")
-- **M-1** `alembic.ini` 的 `post_write_hooks` 配置 ruff,但 venv 外执行时找不到。改用 `python -m ruff` 或显式 venv 路径。
-- **M-2** `conftest.py` 的 `db` fixture rollback 注释有误导,应说明数据靠 `_truncate_between_tests` 清理。
+- ~~**M-1** `alembic.ini` 的 `post_write_hooks` 配置 ruff,但 venv 外执行时找不到。改用 `python -m ruff` 或显式 venv 路径。~~ ✅ 已在 commit `6025444` 修复 — 真因是 ruff 0.15+ 不再注册 `console_scripts.ruff` entry point,改用 `type=exec` + `executable=ruff`(走 PATH);加详细 ASCII 注释说明前置条件(venv activated)和坑(避免 `executable=python` 被 PATH 解析成 system python)
+- ~~**M-2** `conftest.py` 的 `db` fixture rollback 注释有误导,应说明数据靠 `_truncate_between_tests` 清理。~~ ✅ 已在 commit `429b87b` 修复 — 原表述本身过时(`_truncate_between_tests` 在 slice B I-3 时已废除);把 `db` fixture docstring 扩展为明示"savepoint rollback 提供测试间天然隔离",并补充 dev db 持久数据(seed 出来的 admin 行)不会被回滚、需要 `fresh_user` 绕开
 - ~~**M-3** `test_seed_*` 断言用 `>= 12 / >= 25` 太松,应改为 `== 46 / == 29` 严格匹配。~~ ✅ 已在 commit `dbe9bae` 修复 — 顺带把 `admin_user` fixture 换成 `fresh_user`(uuid 临时用户),让"首次 seed `created == EXPECTED`"和"二次 seed `created == 0`"两个不变量在 dev db 有遗留数据时也成立
 - ~~**M-4** `config.py` 的 `Union[str, List[str]]` 改 PEP 604 风格 `str | list[str]`。~~ ✅ 已在 commit `a4a8422` 修复(`backend_cors_origins: str | list[str]`,移除 `typing.Union/List` import)
-- **M-5** `TimestampMixin.updated_at` 的 `onupdate=func.now()` 仅 ORM 层生效,裸 SQL 不更新。base.py docstring 说明限制。
+- ~~**M-5** `TimestampMixin.updated_at` 的 `onupdate=func.now()` 仅 ORM 层生效,裸 SQL 不更新。base.py docstring 说明限制。~~ ✅ 已在 commit `429b87b` 修复 — TimestampMixin docstring 显式列出 ORM UPDATE 才触发,绕过 ORM 的路径(`session.execute(text(...))` / `pg_insert(...).on_conflict_do_update` / psql 手工 UPDATE)都不更新 `updated_at`,需 PG trigger 才能彻底覆盖(MVP 范围内不引入触发器)
 - ~~**M-6** `.env.example` 中 `DATABASE_URL=...@db:5432` 是 docker 内网 host,本机 venv 应用 `localhost`。加注释说明两种用法。~~ ✅ 已在 commit `2f6d3e8` 修复(注释明示三档:`@127.0.0.1:5432` venv / `@db:5432` docker dev / `@db_prod:5432` docker prod)
 
 ### slice E 完成时识别的 V2 候选
